@@ -37,7 +37,7 @@ pub const String = struct {
         try self.buffer.append(m);
     }
 
-    pub fn eql(self: *String, m: []const u8) bool {
+    pub fn eql(self: *const String, m: []const u8) bool {
         return self.buffer.eql(m);
     }
 
@@ -62,14 +62,14 @@ pub const String = struct {
     // [ ] Substring search (find all occurrences)
     // [ ] Replace with substring
     // [ ] Some sort of contains method
-    // [ ] IsNull
+    // [X] IsEmpty
     // [X] length
     // [ ] toSlice
     // [ ] toSliceConst
     // [X] append string
     // [X] equal (to a given string)
     // [ ] ptr for c strings
-    // [ ] reverse
+    // [X] reverse
     // [ ] strip
     // [ ] lower
     // [ ] upper
