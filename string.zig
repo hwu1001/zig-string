@@ -53,7 +53,7 @@ pub const String = struct {
             self.buffer.list.set(j, temp);
             i += 1;
             j -= 1;
-        }       
+        }
     }
 
     //pub fn dump(self: *String) void {
@@ -88,8 +88,8 @@ test ".startsWith" {
 }
 
 test ".endsWith" {
-     var s = try String.init(std.debug.global_allocator, "hello world");
-     defer s.deinit();
+    var s = try String.init(std.debug.global_allocator, "hello world");
+    defer s.deinit();
 
     testing.expect(s.endsWith("orld"));
 }
@@ -125,7 +125,7 @@ test ".reverse" {
 
     s.reverse();
     testing.expect(s.eql(""));
-    
+
     try s.append("h");
     s.reverse();
     testing.expect(s.eql("h"));
