@@ -23,7 +23,7 @@ pub const String = struct {
         return self.buffer.endsWith(m);
     }
 
-    pub fn isNull(self: *const String) bool {
+    pub fn isEmpty(self: *const String) bool {
         // Can't use Buffer.isNull because Buffer maintains a null byte at the
         // end. (e.g., string of "" in a Buffer is not null)
         return self.buffer.len() == 0;
@@ -94,13 +94,13 @@ test ".endsWith" {
     testing.expect(s.endsWith("orld"));
 }
 
-test ".isNull" {
+test ".isEmpty" {
     var s = try String.init(std.debug.global_allocator, "");
     defer s.deinit();
 
-    testing.expect(s.isNull());
+    testing.expect(s.isEmpty());
     try s.append("hello");
-    std.testing.expect(!s.isNull());
+    std.testing.expect(!s.isEmpty());
 }
 
 test ".len" {
