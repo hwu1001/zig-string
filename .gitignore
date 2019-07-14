@@ -1,0 +1,4 @@
+zig-cache/
+/build/
+/build-*/
+/docgen_tmp/
