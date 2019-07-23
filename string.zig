@@ -98,7 +98,7 @@ pub const String = struct {
         if (self.isEmpty() or pattern.len < 1 or pattern.len > self.len()) {
             return indices.toSlice();
         }
-        
+
         var lps = try self.computeLongestPrefixSuffixArray(allocator, pattern);
         var str_index: usize = 0;
         var pat_index: usize = 0;
@@ -121,12 +121,17 @@ pub const String = struct {
         return indices.toSlice();
     }
 
+    pub fn contains(self: *const String, allocator: *Allocator, pattern: []const u8) !bool {
+        var matches = try self.findSubstringIndices(allocator, pattern);
+        return matches.len > 0;
+    }
+
     //pub fn dump(self: *String) void {
     //    std.debug.warn("{}", self.buffer.toSlice());
     //}
     // [X] Substring search (find all occurrences)
     // [ ] Replace with substring
-    // [ ] Some sort of contains method
+    // [X] Some sort of contains method
     // [X] IsEmpty
     // [X] length
     // [ ] toSlice
@@ -218,5 +223,22 @@ test ".findSubstringIndices" {
     testing.expect(mem.eql(usize, m3, [_]usize{}));
 
     const m4 = try s.findSubstringIndices(std.debug.global_allocator, "Mississippi");
-    testing.expect(mem.eql(usize, m4, [_]usize{ 0 }));
+    testing.expect(mem.eql(usize, m4, [_]usize{0}));
+}
+
+test ".contains" {
+    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    defer s.deinit();
+
+    const m1 = try s.contains(std.debug.global_allocator, "i");
+    testing.expect(m1 == true);
+
+    const m2 = try s.contains(std.debug.global_allocator, "iss");
+    testing.expect(m2 == true);
+
+    const m3 = try s.contains(std.debug.global_allocator, "z");
+    testing.expect(m3 == false);
+
+    const m4 = try s.contains(std.debug.global_allocator, "Mississippi");
+    testing.expect(m4 == true);
 }
