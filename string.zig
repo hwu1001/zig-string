@@ -2,6 +2,7 @@ const std = @import("std");
 const mem = std.mem;
 const Allocator = mem.Allocator;
 const Buffer = std.Buffer;
+const ArrayList = std.ArrayList;
 const testing = std.testing;
 
 pub const String = struct {
@@ -29,7 +30,7 @@ pub const String = struct {
         return self.buffer.len() == 0;
     }
 
-    pub fn len(self: *String) usize {
+    pub fn len(self: *const String) usize {
         return self.buffer.len();
     }
 
@@ -48,7 +49,7 @@ pub const String = struct {
         var i: usize = 0;
         var j: usize = self.len() - 1;
         while (i < j) {
-            var temp = self.buffer.list.at(i);
+            var temp = self.at(i);
             self.buffer.list.set(i, self.buffer.list.at(j));
             self.buffer.list.set(j, temp);
             i += 1;
@@ -56,10 +57,74 @@ pub const String = struct {
         }
     }
 
+    pub fn at(self: *const String, i: usize) u8 {
+        return self.buffer.list.at(i);
+    }
+
+    fn computeLongestPrefixSuffixArray(self: *const String, allocator: *Allocator, pattern: []const u8) ![]usize {
+        var m = pattern.len;
+        var lps = ArrayList(usize).init(allocator);
+        defer lps.deinit();
+        var size: usize = 0;
+        while (size < m) : (size += 1) {
+            try lps.append(0);
+        }
+        // Left and right positions going through the pattern
+        var left: usize = 0;
+        var right: usize = 1;
+        while (right < m) {
+            if (pattern[right] == pattern[left]) {
+                lps.set(right, left + 1);
+                left += 1;
+                right += 1;
+            } else {
+                if (left != 0) {
+                    left = lps.at(left - 1);
+                } else {
+                    lps.set(right, 0);
+                    right += 1;
+                }
+            }
+        }
+        return lps.toSlice();
+    }
+
+    /// Return an array of indices containing substring matches for a given pattern
+    /// Uses Knuth-Morris-Pratt Algorithm for string searching
+    /// https://en.wikipedia.org/wiki/Knuth–Morris–Pratt_algorithm
+    pub fn findSubstringIndices(self: *const String, allocator: *Allocator, pattern: []const u8) ![]usize {
+        var indices = ArrayList(usize).init(allocator);
+        defer indices.deinit();
+        if (self.isEmpty() or pattern.len < 1 or pattern.len > self.len()) {
+            return indices.toSlice();
+        }
+        
+        var lps = try self.computeLongestPrefixSuffixArray(allocator, pattern);
+        var str_index: usize = 0;
+        var pat_index: usize = 0;
+        while (str_index < self.len() and pat_index < pattern.len) {
+            if (self.at(str_index) == pattern[pat_index]) {
+                str_index += 1;
+                pat_index += 1;
+            } else {
+                if (pat_index != 0) {
+                    pat_index = lps[pat_index - 1];
+                } else {
+                    str_index += 1;
+                }
+            }
+            if (pat_index == pattern.len) {
+                try indices.append(str_index - pattern.len);
+                pat_index = 0;
+            }
+        }
+        return indices.toSlice();
+    }
+
     //pub fn dump(self: *String) void {
     //    std.debug.warn("{}", self.buffer.toSlice());
     //}
-    // [ ] Substring search (find all occurrences)
+    // [X] Substring search (find all occurrences)
     // [ ] Replace with substring
     // [ ] Some sort of contains method
     // [X] IsEmpty
@@ -137,4 +202,21 @@ test ".reverse" {
     try s.buffer.replaceContents("hello");
     s.reverse();
     testing.expect(s.eql("olleh"));
+}
+
+test ".findSubstringIndices" {
+    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    defer s.deinit();
+
+    const m1 = try s.findSubstringIndices(std.debug.global_allocator, "i");
+    testing.expect(mem.eql(usize, m1, [_]usize{ 1, 4, 7, 10 }));
+
+    const m2 = try s.findSubstringIndices(std.debug.global_allocator, "iss");
+    testing.expect(mem.eql(usize, m2, [_]usize{ 1, 4 }));
+
+    const m3 = try s.findSubstringIndices(std.debug.global_allocator, "z");
+    testing.expect(mem.eql(usize, m3, [_]usize{}));
+
+    const m4 = try s.findSubstringIndices(std.debug.global_allocator, "Mississippi");
+    testing.expect(mem.eql(usize, m4, [_]usize{ 0 }));
 }
