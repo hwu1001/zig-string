@@ -126,6 +126,14 @@ pub const String = struct {
         return matches.len > 0;
     }
 
+    pub fn toSlice(self: *const String) []u8 {
+        return self.buffer.toSlice();
+    }
+
+    pub fn toSliceConst(self: *const String) []const u8 {
+        return self.buffer.toSliceConst();
+    }
+
     //pub fn dump(self: *String) void {
     //    std.debug.warn("{}", self.buffer.toSlice());
     //}
@@ -134,8 +142,8 @@ pub const String = struct {
     // [X] Some sort of contains method
     // [X] IsEmpty
     // [X] length
-    // [ ] toSlice
-    // [ ] toSliceConst
+    // [X] toSlice
+    // [X] toSliceConst
     // [X] append string
     // [X] equal (to a given string)
     // [ ] ptr for c strings
@@ -241,4 +249,16 @@ test ".contains" {
 
     const m4 = try s.contains(std.debug.global_allocator, "Mississippi");
     testing.expect(m4 == true);
+}
+
+test ".toSlice" {
+    var s = try String.init(std.debug.global_allocator, "hello world");
+    defer s.deinit();
+    testing.expect(mem.eql(u8, "hello world", s.toSlice()));
+}
+
+test ".toSliceConst" {
+    var s = try String.init(std.debug.global_allocator, "hello world");
+    defer s.deinit();
+    testing.expect(mem.eql(u8, "hello world", s.toSliceConst()));
 }
