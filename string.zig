@@ -61,6 +61,7 @@ pub const String = struct {
         return self.buffer.list.at(i);
     }
 
+    /// Caller owns the returned memory
     fn computeLongestPrefixSuffixArray(self: *const String, allocator: *Allocator, pattern: []const u8) ![]usize {
         var m = pattern.len;
         var lps = ArrayList(usize).init(allocator);
@@ -86,12 +87,13 @@ pub const String = struct {
                 }
             }
         }
-        return lps.toSlice();
+        return lps.toOwnedSlice();
     }
 
     /// Return an array of indices containing substring matches for a given pattern
     /// Uses Knuth-Morris-Pratt Algorithm for string searching
     /// https://en.wikipedia.org/wiki/Knuth–Morris–Pratt_algorithm
+    /// Caller owns the returned memory
     pub fn findSubstringIndices(self: *const String, allocator: *Allocator, pattern: []const u8) ![]usize {
         var indices = ArrayList(usize).init(allocator);
         defer indices.deinit();
@@ -118,11 +120,12 @@ pub const String = struct {
                 pat_index = 0;
             }
         }
-        return indices.toSlice();
+        return indices.toOwnedSlice();
     }
 
     pub fn contains(self: *const String, allocator: *Allocator, pattern: []const u8) !bool {
         var matches = try self.findSubstringIndices(allocator, pattern);
+        defer allocator.free(matches);
         return matches.len > 0;
     }
 
