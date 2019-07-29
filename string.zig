@@ -287,19 +287,3 @@ test ".trim" {
     try s.trim(" \n");
     testing.expectEqualSlices(u8, "foo", s.toSliceConst());
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
