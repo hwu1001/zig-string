@@ -134,6 +134,16 @@ pub const String = struct {
         return self.buffer.toSliceConst();
     }
 
+    pub fn trim(self: *String, trim_pattern: []const u8) !void {
+        var trimmed_str = mem.trim(u8, self.toSliceConst(), trim_pattern);
+        const m = trimmed_str.len;
+        std.debug.assert(self.len() >= m); // this should always be true
+        for (trimmed_str) |v, i| {
+            self.buffer.list.set(i, v);
+        }
+        try self.buffer.resize(m);
+    }
+
     //pub fn dump(self: *String) void {
     //    std.debug.warn("{}", self.buffer.toSlice());
     //}
@@ -232,6 +242,11 @@ test ".findSubstringIndices" {
 
     const m4 = try s.findSubstringIndices(std.debug.global_allocator, "Mississippi");
     testing.expect(mem.eql(usize, m4, [_]usize{0}));
+
+    var s2 = try String.init(std.debug.global_allocator, "的中对不起我的中文不好");
+    defer s2.deinit();
+    const m5 = try s2.findSubstringIndices(std.debug.global_allocator, "的中");
+    testing.expect(mem.eql(usize, m5, [_]usize{ 0, 18 }));
 }
 
 test ".contains" {
@@ -262,3 +277,29 @@ test ".toSliceConst" {
     defer s.deinit();
     testing.expect(mem.eql(u8, "hello world", s.toSliceConst()));
 }
+
+test ".trim" {
+    var s = try String.init(std.debug.global_allocator, " foo\n ");
+    defer s.deinit();
+    try s.trim(" \n");
+    testing.expectEqualSlices(u8, "foo", s.toSliceConst());
+    testing.expect(3 == s.len());
+    try s.trim(" \n");
+    testing.expectEqualSlices(u8, "foo", s.toSliceConst());
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
