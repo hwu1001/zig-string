@@ -102,6 +102,8 @@ pub const String = struct {
         }
 
         var lps = try self.computeLongestPrefixSuffixArray(allocator, pattern);
+        defer allocator.free(lps);
+
         var str_index: usize = 0;
         var pat_index: usize = 0;
         while (str_index < self.len() and pat_index < pattern.len) {
