@@ -141,6 +141,15 @@ pub const String = struct {
 
     pub fn trim(self: *String, trim_pattern: []const u8) !void {
         var trimmed_str = mem.trim(u8, self.toSliceConst(), trim_pattern);
+        try self.setTrimmedStr(trimmed_str);
+    }
+
+    pub fn trimLeft(self: *String, trim_pattern: []const u8) !void {
+        const trimmed_str = mem.trimLeft(u8, self.toSliceConst(), trim_pattern);
+        try self.setTrimmedStr(trimmed_str);
+    }
+
+    fn setTrimmedStr(self: *String, trimmed_str: []const u8) !void {
         const m = trimmed_str.len;
         std.debug.assert(self.len() >= m); // this should always be true
         for (trimmed_str) |v, i| {
@@ -163,11 +172,10 @@ pub const String = struct {
     // [X] equal (to a given string)
     // [ ] ptr for c strings
     // [X] reverse
-    // [ ] strip
+    // [X] strip
     // [ ] lower
     // [ ] upper
-    // [ ] strip whitespace
-    // [ ] left strip
+    // [X] left strip
     // [ ] right strip
     // [ ] split
     // [ ] count occurrences of substring
@@ -291,4 +299,11 @@ test ".trim" {
     testing.expect(3 == s.len());
     try s.trim(" \n");
     testing.expectEqualSlices(u8, "foo", s.toSliceConst());
+}
+
+test ".trimLeft" {
+    var s = try String.init(std.debug.global_allocator, " foo\n ");
+    defer s.deinit();
+    try s.trimLeft(" \n");
+    testing.expectEqualSlices(u8, "foo\n ", s.toSliceConst());
 }
