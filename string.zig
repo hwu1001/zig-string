@@ -149,6 +149,11 @@ pub const String = struct {
         try self.setTrimmedStr(trimmed_str);
     }
 
+    pub fn trimRight(self: *String, trim_pattern: []const u8) !void {
+        const trimmed_str = mem.trimRight(u8, self.toSliceConst(), trim_pattern);
+        try self.setTrimmedStr(trimmed_str);
+    }
+
     fn setTrimmedStr(self: *String, trimmed_str: []const u8) !void {
         const m = trimmed_str.len;
         std.debug.assert(self.len() >= m); // this should always be true
@@ -306,4 +311,11 @@ test ".trimLeft" {
     defer s.deinit();
     try s.trimLeft(" \n");
     testing.expectEqualSlices(u8, "foo\n ", s.toSliceConst());
+}
+
+test ".trimRight" {
+    var s = try String.init(std.debug.global_allocator, " foo\n ");
+    defer s.deinit();
+    try s.trimRight(" \n");
+    testing.expectEqualSlices(u8, " foo", s.toSliceConst());
 }
