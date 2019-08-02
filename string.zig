@@ -163,9 +163,10 @@ pub const String = struct {
         try self.buffer.resize(m);
     }
 
-    //pub fn dump(self: *String) void {
-    //    std.debug.warn("{}", self.buffer.toSlice());
-    //}
+    pub fn split(self: *const String, delimiter: []const u8) mem.SplitIterator {
+        return mem.separate(self.toSliceConst(), delimiter);
+    }
+
     // [X] Substring search (find all occurrences)
     // [ ] Replace with substring
     // [X] Some sort of contains method
@@ -181,8 +182,8 @@ pub const String = struct {
     // [ ] lower
     // [ ] upper
     // [X] left strip
-    // [ ] right strip
-    // [ ] split
+    // [X] right strip
+    // [X] split
     // [ ] count occurrences of substring
 };
 
@@ -318,4 +319,28 @@ test ".trimRight" {
     defer s.deinit();
     try s.trimRight(" \n");
     testing.expectEqualSlices(u8, " foo", s.toSliceConst());
+}
+
+test ".split" {
+    var s = try String.init(std.debug.global_allocator, "abc|def||ghi");
+    defer s.deinit();
+
+    // All of these tests are from std/mem.zig
+    var it = s.split("|");
+    testing.expect(mem.eql(u8, it.next().?, "abc"));
+    testing.expect(mem.eql(u8, it.next().?, "def"));
+    testing.expect(mem.eql(u8, it.next().?, ""));
+    testing.expect(mem.eql(u8, it.next().?, "ghi"));
+    testing.expect(it.next() == null);
+
+    try s.buffer.replaceContents("");
+    it = s.split("|");
+    testing.expect(mem.eql(u8, it.next().?, ""));
+    testing.expect(it.next() == null);
+
+    try s.buffer.replaceContents("|");
+    it = s.split("|");
+    testing.expect(mem.eql(u8, it.next().?, ""));
+    testing.expect(mem.eql(u8, it.next().?, ""));
+    testing.expect(it.next() == null);
 }
