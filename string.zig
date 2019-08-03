@@ -167,8 +167,41 @@ pub const String = struct {
         return mem.separate(self.toSliceConst(), delimiter);
     }
 
+    /// Replaces all occurrences of substring `old` replaced with `new` in place
+    pub fn replace(self: *String, allocator: *Allocator, old: []const u8, new: []const u8) !void {
+        if (self.len() < 1 or old.len < 1) {
+            return;
+        }
+
+        var matches = try self.findSubstringIndices(allocator, old);
+        defer allocator.free(matches);
+        if (matches.len < 1) {
+            return;
+        }
+        var new_contents = ArrayList(u8).init(allocator);
+        defer new_contents.deinit();
+
+        var orig_index: usize = 0;
+        for (matches) |match_index| {
+            while (orig_index < match_index) {
+                try new_contents.append(self.at(orig_index));
+                orig_index += 1;
+            }
+            orig_index = match_index + old.len;
+            for (new) |val| {
+                try new_contents.append(val);
+            }
+        }
+        // Append end of string if match does not end original string
+        while (orig_index < self.len()) {
+            try new_contents.append(self.at(orig_index));
+            orig_index += 1;
+        }
+        try self.buffer.replaceContents(new_contents.toSliceConst());
+    }
+
     // [X] Substring search (find all occurrences)
-    // [ ] Replace with substring
+    // [X] Replace with substring
     // [X] Some sort of contains method
     // [X] IsEmpty
     // [X] length
@@ -343,4 +376,19 @@ test ".split" {
     testing.expect(mem.eql(u8, it.next().?, ""));
     testing.expect(mem.eql(u8, it.next().?, ""));
     testing.expect(it.next() == null);
+}
+
+test ".replace" {
+    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    defer s.deinit();
+    try s.replace(std.debug.global_allocator, "iss", "e");
+    testing.expectEqualSlices(u8, "Meeippi", s.toSliceConst());
+
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(std.debug.global_allocator, "iss", "issi");
+    testing.expectEqualSlices(u8, "Missiissiippi", s.toSliceConst());
+
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(std.debug.global_allocator, "i", "a");
+    testing.expectEqualSlices(u8, "Massassappa", s.toSliceConst());
 }
