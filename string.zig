@@ -391,4 +391,12 @@ test ".replace" {
     try s.buffer.replaceContents("Mississippi");
     try s.replace(std.debug.global_allocator, "i", "a");
     testing.expectEqualSlices(u8, "Massassappa", s.toSliceConst());
+
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(std.debug.global_allocator, "iss", "");
+    testing.expectEqualSlices(u8, "Mippi", s.toSliceConst());
+
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(std.debug.global_allocator, s.toSliceConst(), "Foo");
+    testing.expectEqualSlices(u8, "Foo", s.toSliceConst());
 }
