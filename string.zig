@@ -1,5 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
+const ascii = std.ascii;
 const Allocator = mem.Allocator;
 const Buffer = std.Buffer;
 const ArrayList = std.ArrayList;
@@ -203,6 +204,13 @@ pub const String = struct {
     pub fn count(self: *const String, allocator: *Allocator, pattern: []const u8) !usize {
         var matches = try self.findSubstringIndices(allocator, pattern);
         return matches.len;
+    }
+
+    /// Only makes ASCII characters lowercase
+    pub fn toLower(self: *String) void {
+        for (self.toSlice()) |*c| {
+            c.* = ascii.toLower(c.*);
+        }
     }
 
     // [X] Substring search (find all occurrences)
@@ -421,3 +429,26 @@ test ".count" {
     const c4 = try s.count(std.debug.global_allocator, "iss");
     testing.expect(c4 == 2);
 }
+
+test ".toLower" {
+    var s = try String.init(std.debug.global_allocator, "ABCDEF");
+    defer s.deinit();
+    s.toLower();
+    testing.expectEqualSlices(u8, "abcdef", s.toSliceConst());
+
+    try s.buffer.replaceContents("的ABcdEF中");
+    s.toLower();
+    testing.expectEqualSlices(u8, "的abcdef中", s.toSliceConst());
+
+    try s.buffer.replaceContents("AB的cd中EF");
+    s.toLower();
+    testing.expectEqualSlices(u8, "ab的cd中ef", s.toSliceConst());
+}
+
+// pub fn main() !void {
+//     var s = try String.init(std.debug.global_allocator, "Mississippi");
+//     defer s.deinit();
+//     for (s.toSlice()) |*c| {
+//         std.debug.warn("{}\n", c.*);
+//     }
+// }
