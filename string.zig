@@ -213,6 +213,13 @@ pub const String = struct {
         }
     }
 
+    /// Only makes ASCII characters uppercase
+    pub fn toUpper(self: *String) void {
+        for (self.toSlice()) |*c| {
+            c.* = ascii.toUpper(c.*);
+        }
+    }
+
     // [X] Substring search (find all occurrences)
     // [X] Replace with substring
     // [X] Some sort of contains method
@@ -225,8 +232,8 @@ pub const String = struct {
     // [ ] ptr for c strings
     // [X] reverse
     // [X] strip
-    // [ ] lower
-    // [ ] upper
+    // [X] lower
+    // [X] upper
     // [X] left strip
     // [X] right strip
     // [X] split
@@ -445,10 +452,17 @@ test ".toLower" {
     testing.expectEqualSlices(u8, "ab的cd中ef", s.toSliceConst());
 }
 
-// pub fn main() !void {
-//     var s = try String.init(std.debug.global_allocator, "Mississippi");
-//     defer s.deinit();
-//     for (s.toSlice()) |*c| {
-//         std.debug.warn("{}\n", c.*);
-//     }
-// }
+test ".toUpper" {
+    var s = try String.init(std.debug.global_allocator, "abcdef");
+    defer s.deinit();
+    s.toUpper();
+    testing.expectEqualSlices(u8, "ABCDEF", s.toSliceConst());
+    
+    try s.buffer.replaceContents("的abCDef中");
+    s.toUpper();
+    testing.expectEqualSlices(u8, "的ABCDEF中", s.toSliceConst());
+
+    try s.buffer.replaceContents("ab的CD中ef");
+    s.toUpper();
+    testing.expectEqualSlices(u8, "AB的CD中EF", s.toSliceConst());
+}
