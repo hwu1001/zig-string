@@ -200,6 +200,11 @@ pub const String = struct {
         try self.buffer.replaceContents(new_contents.toSliceConst());
     }
 
+    pub fn count(self: *const String, allocator: *Allocator, pattern: []const u8) !usize {
+        var matches = try self.findSubstringIndices(allocator, pattern);
+        return matches.len;
+    }
+
     // [X] Substring search (find all occurrences)
     // [X] Replace with substring
     // [X] Some sort of contains method
@@ -217,7 +222,7 @@ pub const String = struct {
     // [X] left strip
     // [X] right strip
     // [X] split
-    // [ ] count occurrences of substring
+    // [X] count occurrences of substring
 };
 
 test ".startsWith" {
@@ -399,4 +404,20 @@ test ".replace" {
     try s.buffer.replaceContents("Mississippi");
     try s.replace(std.debug.global_allocator, s.toSliceConst(), "Foo");
     testing.expectEqualSlices(u8, "Foo", s.toSliceConst());
+}
+
+test ".count" {
+    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    defer s.deinit();
+    const c1 = try s.count(std.debug.global_allocator, "i");
+    testing.expect(c1 == 4);
+
+    const c2 = try s.count(std.debug.global_allocator, "M");
+    testing.expect(c2 == 1);
+
+    const c3 = try s.count(std.debug.global_allocator, "abc");
+    testing.expect(c3 == 0);
+
+    const c4 = try s.count(std.debug.global_allocator, "iss");
+    testing.expect(c4 == 2);
 }
