@@ -220,24 +220,9 @@ pub const String = struct {
         }
     }
 
-    // [X] Substring search (find all occurrences)
-    // [X] Replace with substring
-    // [X] Some sort of contains method
-    // [X] IsEmpty
-    // [X] length
-    // [X] toSlice
-    // [X] toSliceConst
-    // [X] append string
-    // [X] equal (to a given string)
-    // [ ] ptr for c strings
-    // [X] reverse
-    // [X] strip
-    // [X] lower
-    // [X] upper
-    // [X] left strip
-    // [X] right strip
-    // [X] split
-    // [X] count occurrences of substring
+    pub fn ptr(self: *const String) [*]u8 {
+        return self.buffer.ptr();
+    }
 };
 
 test ".startsWith" {
@@ -465,4 +450,10 @@ test ".toUpper" {
     try s.buffer.replaceContents("ab的CD中ef");
     s.toUpper();
     testing.expectEqualSlices(u8, "AB的CD中EF", s.toSliceConst());
+}
+
+test ".ptr" {
+    var s = try String.init(std.debug.global_allocator, "abcdef");
+    defer s.deinit();
+    testing.expect(mem.eql(u8, mem.toSliceConst(u8, s.ptr()), s.toSliceConst()));
 }
