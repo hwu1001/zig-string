@@ -15,7 +15,7 @@ const std = @import("std");
 const String = @import("/some/path/string.zig").String;
 
 pub fn main() !void {
-    var buf: [150]u8 = undefined;
+    var buf: [1024]u8 = undefined;
     var fba = std.heap.ThreadSafeFixedBufferAllocator.init(buf[0..]);
     var s = try String.init(&fba.allocator, "hello, world");
     defer s.deinit();

@@ -226,21 +226,27 @@ pub const String = struct {
 };
 
 test ".startsWith" {
-    var s = try String.init(std.debug.global_allocator, "hello world");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "hello world");
     defer s.deinit();
 
     testing.expect(s.startsWith("hel"));
 }
 
 test ".endsWith" {
-    var s = try String.init(std.debug.global_allocator, "hello world");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "hello world");
     defer s.deinit();
 
     testing.expect(s.endsWith("orld"));
 }
 
 test ".isEmpty" {
-    var s = try String.init(std.debug.global_allocator, "");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "");
     defer s.deinit();
 
     testing.expect(s.isEmpty());
@@ -249,7 +255,9 @@ test ".isEmpty" {
 }
 
 test ".len" {
-    var s = try String.init(std.debug.global_allocator, "");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "");
     defer s.deinit();
 
     testing.expect(s.len() == 0);
@@ -258,14 +266,18 @@ test ".len" {
 }
 
 test ".eql" {
-    var s = try String.init(std.debug.global_allocator, "hello world");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "hello world");
     defer s.deinit();
 
     testing.expect(s.eql("hello world"));
 }
 
 test ".reverse" {
-    var s = try String.init(std.debug.global_allocator, "");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "");
     defer s.deinit();
 
     s.reverse();
@@ -285,58 +297,68 @@ test ".reverse" {
 }
 
 test ".findSubstringIndices" {
-    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    var buf: [1024]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "Mississippi");
     defer s.deinit();
 
-    const m1 = try s.findSubstringIndices(std.debug.global_allocator, "i");
+    const m1 = try s.findSubstringIndices(allocator, "i");
     testing.expect(mem.eql(usize, m1, [_]usize{ 1, 4, 7, 10 }));
 
-    const m2 = try s.findSubstringIndices(std.debug.global_allocator, "iss");
+    const m2 = try s.findSubstringIndices(allocator, "iss");
     testing.expect(mem.eql(usize, m2, [_]usize{ 1, 4 }));
 
-    const m3 = try s.findSubstringIndices(std.debug.global_allocator, "z");
+    const m3 = try s.findSubstringIndices(allocator, "z");
     testing.expect(mem.eql(usize, m3, [_]usize{}));
 
-    const m4 = try s.findSubstringIndices(std.debug.global_allocator, "Mississippi");
+    const m4 = try s.findSubstringIndices(allocator, "Mississippi");
     testing.expect(mem.eql(usize, m4, [_]usize{0}));
 
-    var s2 = try String.init(std.debug.global_allocator, "的中对不起我的中文不好");
+    var s2 = try String.init(allocator, "的中对不起我的中文不好");
     defer s2.deinit();
-    const m5 = try s2.findSubstringIndices(std.debug.global_allocator, "的中");
+    const m5 = try s2.findSubstringIndices(allocator, "的中");
     testing.expect(mem.eql(usize, m5, [_]usize{ 0, 18 }));
 }
 
 test ".contains" {
-    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    var buf: [1024]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "Mississippi");
     defer s.deinit();
 
-    const m1 = try s.contains(std.debug.global_allocator, "i");
+    const m1 = try s.contains(allocator, "i");
     testing.expect(m1 == true);
 
-    const m2 = try s.contains(std.debug.global_allocator, "iss");
+    const m2 = try s.contains(allocator, "iss");
     testing.expect(m2 == true);
 
-    const m3 = try s.contains(std.debug.global_allocator, "z");
+    const m3 = try s.contains(allocator, "z");
     testing.expect(m3 == false);
 
-    const m4 = try s.contains(std.debug.global_allocator, "Mississippi");
+    const m4 = try s.contains(allocator, "Mississippi");
     testing.expect(m4 == true);
 }
 
 test ".toSlice" {
-    var s = try String.init(std.debug.global_allocator, "hello world");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "hello world");
     defer s.deinit();
     testing.expect(mem.eql(u8, "hello world", s.toSlice()));
 }
 
 test ".toSliceConst" {
-    var s = try String.init(std.debug.global_allocator, "hello world");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "hello world");
     defer s.deinit();
     testing.expect(mem.eql(u8, "hello world", s.toSliceConst()));
 }
 
 test ".trim" {
-    var s = try String.init(std.debug.global_allocator, " foo\n ");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, " foo\n ");
     defer s.deinit();
     try s.trim(" \n");
     testing.expectEqualSlices(u8, "foo", s.toSliceConst());
@@ -346,21 +368,27 @@ test ".trim" {
 }
 
 test ".trimLeft" {
-    var s = try String.init(std.debug.global_allocator, " foo\n ");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, " foo\n ");
     defer s.deinit();
     try s.trimLeft(" \n");
     testing.expectEqualSlices(u8, "foo\n ", s.toSliceConst());
 }
 
 test ".trimRight" {
-    var s = try String.init(std.debug.global_allocator, " foo\n ");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, " foo\n ");
     defer s.deinit();
     try s.trimRight(" \n");
     testing.expectEqualSlices(u8, " foo", s.toSliceConst());
 }
 
 test ".split" {
-    var s = try String.init(std.debug.global_allocator, "abc|def||ghi");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "abc|def||ghi");
     defer s.deinit();
 
     // All of these tests are from std/mem.zig
@@ -384,46 +412,52 @@ test ".split" {
 }
 
 test ".replace" {
-    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    var buf: [1024]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "Mississippi");
     defer s.deinit();
-    try s.replace(std.debug.global_allocator, "iss", "e");
+    try s.replace(allocator, "iss", "e");
     testing.expectEqualSlices(u8, "Meeippi", s.toSliceConst());
 
     try s.buffer.replaceContents("Mississippi");
-    try s.replace(std.debug.global_allocator, "iss", "issi");
+    try s.replace(allocator, "iss", "issi");
     testing.expectEqualSlices(u8, "Missiissiippi", s.toSliceConst());
 
     try s.buffer.replaceContents("Mississippi");
-    try s.replace(std.debug.global_allocator, "i", "a");
+    try s.replace(allocator, "i", "a");
     testing.expectEqualSlices(u8, "Massassappa", s.toSliceConst());
 
     try s.buffer.replaceContents("Mississippi");
-    try s.replace(std.debug.global_allocator, "iss", "");
+    try s.replace(allocator, "iss", "");
     testing.expectEqualSlices(u8, "Mippi", s.toSliceConst());
 
     try s.buffer.replaceContents("Mississippi");
-    try s.replace(std.debug.global_allocator, s.toSliceConst(), "Foo");
+    try s.replace(allocator, s.toSliceConst(), "Foo");
     testing.expectEqualSlices(u8, "Foo", s.toSliceConst());
 }
 
 test ".count" {
-    var s = try String.init(std.debug.global_allocator, "Mississippi");
+    var buf: [1024]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "Mississippi");
     defer s.deinit();
-    const c1 = try s.count(std.debug.global_allocator, "i");
+    const c1 = try s.count(allocator, "i");
     testing.expect(c1 == 4);
 
-    const c2 = try s.count(std.debug.global_allocator, "M");
+    const c2 = try s.count(allocator, "M");
     testing.expect(c2 == 1);
 
-    const c3 = try s.count(std.debug.global_allocator, "abc");
+    const c3 = try s.count(allocator, "abc");
     testing.expect(c3 == 0);
 
-    const c4 = try s.count(std.debug.global_allocator, "iss");
+    const c4 = try s.count(allocator, "iss");
     testing.expect(c4 == 2);
 }
 
 test ".toLower" {
-    var s = try String.init(std.debug.global_allocator, "ABCDEF");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "ABCDEF");
     defer s.deinit();
     s.toLower();
     testing.expectEqualSlices(u8, "abcdef", s.toSliceConst());
@@ -438,7 +472,9 @@ test ".toLower" {
 }
 
 test ".toUpper" {
-    var s = try String.init(std.debug.global_allocator, "abcdef");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "abcdef");
     defer s.deinit();
     s.toUpper();
     testing.expectEqualSlices(u8, "ABCDEF", s.toSliceConst());
@@ -453,7 +489,9 @@ test ".toUpper" {
 }
 
 test ".ptr" {
-    var s = try String.init(std.debug.global_allocator, "abcdef");
+    var buf: [256]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "abcdef");
     defer s.deinit();
     testing.expect(mem.eql(u8, mem.toSliceConst(u8, s.ptr()), s.toSliceConst()));
 }
