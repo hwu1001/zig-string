@@ -2,15 +2,15 @@ const std = @import("std");
 const mem = std.mem;
 const ascii = std.ascii;
 const Allocator = mem.Allocator;
-const Buffer = std.Buffer;
+const Buffer = std.ArrayListSentineled;
 const ArrayList = std.ArrayList;
 const testing = std.testing;
 
 pub const String = struct {
-    buffer: Buffer,
+    buffer: Buffer(u8, 0),
 
-    pub fn init(allocator: *Allocator, m: []const u8) !String {
-        return String{ .buffer = try Buffer.init(allocator, m) };
+    pub fn init(allocator: *Allocator, m: []const u8) anyerror!String {
+        return String{ .buffer = try Buffer(u8, 0).init(allocator, m) };
     }
 
     pub fn deinit(self: *String) void {
@@ -35,8 +35,8 @@ pub const String = struct {
         return self.buffer.len();
     }
 
-    pub fn append(self: *String, m: []const u8) !void {
-        try self.buffer.append(m);
+    pub fn append(self: *String, m: []const u8) anyerror!void {
+        try self.buffer.appendSlice(m);
     }
 
     pub fn eql(self: *const String, m: []const u8) bool {
@@ -51,15 +51,15 @@ pub const String = struct {
         var j: usize = self.len() - 1;
         while (i < j) {
             var temp = self.at(i);
-            self.buffer.list.set(i, self.buffer.list.at(j));
-            self.buffer.list.set(j, temp);
+            self.buffer.list.items[i] = self.buffer.list.items[j];
+            self.buffer.list.items[j] = temp;
             i += 1;
             j -= 1;
         }
     }
 
     pub fn at(self: *const String, i: usize) u8 {
-        return self.buffer.list.at(i);
+        return self.buffer.list.items[i];
     }
 
     /// Caller owns the returned memory
@@ -76,14 +76,14 @@ pub const String = struct {
         var right: usize = 1;
         while (right < m) {
             if (pattern[right] == pattern[left]) {
-                lps.set(right, left + 1);
+                lps.items[right] = left + 1;
                 left += 1;
                 right += 1;
             } else {
                 if (left != 0) {
-                    left = lps.at(left - 1);
+                    left = lps.items[left - 1];
                 } else {
-                    lps.set(right, 0);
+                    lps.items[right] = 0;
                     right += 1;
                 }
             }
@@ -95,11 +95,11 @@ pub const String = struct {
     /// Uses Knuth-Morris-Pratt Algorithm for string searching
     /// https://en.wikipedia.org/wiki/Knuth–Morris–Pratt_algorithm
     /// Caller owns the returned memory
-    pub fn findSubstringIndices(self: *const String, allocator: *Allocator, pattern: []const u8) ![]usize {
+    pub fn findSubstringIndices(self: *const String, allocator: *Allocator, pattern: []const u8) anyerror![]usize {
         var indices = ArrayList(usize).init(allocator);
         defer indices.deinit();
         if (self.isEmpty() or pattern.len < 1 or pattern.len > self.len()) {
-            return indices.toSlice();
+            return indices.items;
         }
 
         var lps = try self.computeLongestPrefixSuffixArray(allocator, pattern);
@@ -132,44 +132,46 @@ pub const String = struct {
         return matches.len > 0;
     }
 
-    pub fn toSlice(self: *const String) []u8 {
-        return self.buffer.toSlice();
+    pub fn toSlice(self: *const String) [:0]u8 {
+        const _len = self.buffer.list.items.len;
+        return self.buffer.list.items[0 .. _len - 1 :0];
     }
 
-    pub fn toSliceConst(self: *const String) []const u8 {
-        return self.buffer.toSliceConst();
+    pub fn toSliceConst(self: *const String) [:0]const u8 {
+        const _len = self.buffer.list.items.len;
+        return @as([:0]const u8, self.buffer.list.items[0 .. _len - 1 :0]);
     }
 
-    pub fn trim(self: *String, trim_pattern: []const u8) !void {
+    pub fn trim(self: *String, trim_pattern: []const u8) anyerror!void {
         var trimmed_str = mem.trim(u8, self.toSliceConst(), trim_pattern);
         try self.setTrimmedStr(trimmed_str);
     }
 
-    pub fn trimLeft(self: *String, trim_pattern: []const u8) !void {
+    pub fn trimLeft(self: *String, trim_pattern: []const u8) anyerror!void {
         const trimmed_str = mem.trimLeft(u8, self.toSliceConst(), trim_pattern);
         try self.setTrimmedStr(trimmed_str);
     }
 
-    pub fn trimRight(self: *String, trim_pattern: []const u8) !void {
+    pub fn trimRight(self: *String, trim_pattern: []const u8) anyerror!void {
         const trimmed_str = mem.trimRight(u8, self.toSliceConst(), trim_pattern);
         try self.setTrimmedStr(trimmed_str);
     }
 
-    fn setTrimmedStr(self: *String, trimmed_str: []const u8) !void {
+    fn setTrimmedStr(self: *String, trimmed_str: []const u8) anyerror!void {
         const m = trimmed_str.len;
         std.debug.assert(self.len() >= m); // this should always be true
         for (trimmed_str) |v, i| {
-            self.buffer.list.set(i, v);
+            self.buffer.list.items[i] = v;
         }
         try self.buffer.resize(m);
     }
 
     pub fn split(self: *const String, delimiter: []const u8) mem.SplitIterator {
-        return mem.separate(self.toSliceConst(), delimiter);
+        return mem.split(self.toSliceConst(), delimiter);
     }
 
     /// Replaces all occurrences of substring `old` replaced with `new` in place
-    pub fn replace(self: *String, allocator: *Allocator, old: []const u8, new: []const u8) !void {
+    pub fn replace(self: *String, allocator: *Allocator, old: []const u8, new: []const u8) anyerror!void {
         if (self.len() < 1 or old.len < 1) {
             return;
         }
@@ -198,10 +200,10 @@ pub const String = struct {
             try new_contents.append(self.at(orig_index));
             orig_index += 1;
         }
-        try self.buffer.replaceContents(new_contents.toSliceConst());
+        try self.buffer.replaceContents(@as([]const u8, new_contents.items));
     }
 
-    pub fn count(self: *const String, allocator: *Allocator, pattern: []const u8) !usize {
+    pub fn count(self: *const String, allocator: *Allocator, pattern: []const u8) anyerror!usize {
         var matches = try self.findSubstringIndices(allocator, pattern);
         return matches.len;
     }
@@ -220,8 +222,8 @@ pub const String = struct {
         }
     }
 
-    pub fn ptr(self: *const String) [*]u8 {
-        return self.buffer.ptr();
+    pub fn ptr(self: *const String) [*:0]u8 {
+        return self.buffer.span().ptr;
     }
 };
 
@@ -303,21 +305,21 @@ test ".findSubstringIndices" {
     defer s.deinit();
 
     const m1 = try s.findSubstringIndices(allocator, "i");
-    testing.expect(mem.eql(usize, m1, [_]usize{ 1, 4, 7, 10 }));
+    testing.expect(mem.eql(usize, m1, &[_]usize{ 1, 4, 7, 10 }));
 
     const m2 = try s.findSubstringIndices(allocator, "iss");
-    testing.expect(mem.eql(usize, m2, [_]usize{ 1, 4 }));
+    testing.expect(mem.eql(usize, m2, &[_]usize{ 1, 4 }));
 
     const m3 = try s.findSubstringIndices(allocator, "z");
-    testing.expect(mem.eql(usize, m3, [_]usize{}));
+    testing.expect(mem.eql(usize, m3, &[_]usize{}));
 
     const m4 = try s.findSubstringIndices(allocator, "Mississippi");
-    testing.expect(mem.eql(usize, m4, [_]usize{0}));
+    testing.expect(mem.eql(usize, m4, &[_]usize{0}));
 
     var s2 = try String.init(allocator, "的中对不起我的中文不好");
     defer s2.deinit();
     const m5 = try s2.findSubstringIndices(allocator, "的中");
-    testing.expect(mem.eql(usize, m5, [_]usize{ 0, 18 }));
+    testing.expect(mem.eql(usize, m5, &[_]usize{ 0, 18 }));
 }
 
 test ".contains" {
@@ -478,7 +480,7 @@ test ".toUpper" {
     defer s.deinit();
     s.toUpper();
     testing.expectEqualSlices(u8, "ABCDEF", s.toSliceConst());
-    
+
     try s.buffer.replaceContents("的abCDef中");
     s.toUpper();
     testing.expectEqualSlices(u8, "的ABCDEF中", s.toSliceConst());
@@ -493,5 +495,5 @@ test ".ptr" {
     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
     var s = try String.init(allocator, "abcdef");
     defer s.deinit();
-    testing.expect(mem.eql(u8, mem.toSliceConst(u8, s.ptr()), s.toSliceConst()));
+    testing.expect(mem.eql(u8, mem.spanZ(s.ptr()), s.toSliceConst()));
 }
