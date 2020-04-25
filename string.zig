@@ -9,7 +9,13 @@ const testing = std.testing;
 pub const String = struct {
     buffer: Buffer(u8, 0),
 
-    pub fn init(allocator: *Allocator, m: []const u8) anyerror!String {
+    const Self = String;
+
+    pub const Searcher = enum {
+        KnuthMorrisPratt, BoyerMooreHorspool
+    };
+
+    pub fn init(allocator: *Allocator, m: []const u8) !String {
         return String{ .buffer = try Buffer(u8, 0).init(allocator, m) };
     }
 
@@ -35,7 +41,7 @@ pub const String = struct {
         return self.buffer.len();
     }
 
-    pub fn append(self: *String, m: []const u8) anyerror!void {
+    pub fn append(self: *String, m: []const u8) !void {
         try self.buffer.appendSlice(m);
     }
 
@@ -91,11 +97,94 @@ pub const String = struct {
         return lps.toOwnedSlice();
     }
 
+    fn preprocessBcTable(table: []isize, needle: []const u8) !void {
+        var j: isize = 0;
+        while (j < needle.len) : (j += 1) {
+            const a = @intCast(usize, needle[@intCast(usize, j)]);
+            table[a] = j;
+        }
+    }
+
+    fn preprocessGsTable(allocator: *Allocator, table: []usize, haystack: []const u8, needle: []const u8) !void {
+        var tmp = try allocator.alloc(usize, needle.len + 1);
+        defer allocator.free(tmp);
+        {
+            var i = needle.len;
+            var j = needle.len + 1;
+            tmp[i] = j;
+            while (i > 0) {
+                while (j <= needle.len and (needle[i - 1] != needle[j - 1])) : (j = tmp[j]) {
+                    if (table[j] == 0) {
+                        table[j] = j - 1;
+                    }
+                }
+
+                i -= 1;
+                j -= 1;
+                tmp[i] = j;
+            }
+        }
+
+        {
+            var i: usize = 0;
+            var j = tmp[0];
+
+            while (i <= needle.len) : (i += 1) {
+                if (table[i] == 0) {
+                    table[i] = j;
+                }
+
+                if (i == j) {
+                    j = tmp[j];
+                }
+            }
+        }
+    }
+
+    /// Caller owns the returned memory.
+    fn findSubstringIndicesBmh(self: *const String, allocator: *Allocator, needle: []const u8) ![]usize {
+        var indices = ArrayList(usize).init(allocator);
+        const haystack = self.buffer.list.items[0..self.len()];
+
+        var gs_table = try allocator.alloc(usize, needle.len + 1);
+        defer allocator.free(gs_table);
+        {
+            var i: usize = 0;
+            while (i < needle.len + 1) : (i += 1) {
+                gs_table[i] = 0;
+            }
+        }
+
+        var bc_table = [_]isize{-1} ** 256;
+
+        try preprocessBcTable(&bc_table, needle);
+        try preprocessGsTable(allocator, gs_table, haystack, needle);
+
+        var i: usize = 0;
+        while (i <= haystack.len - needle.len) {
+            var j = needle.len - 1;
+            var skip: bool = false;
+            while (j >= 0 and (needle[j] == haystack[i + j])) : (j -= 1) {
+                if (j == 0) {
+                    try indices.append(i);
+                    i += gs_table[0];
+                    skip = true;
+                    break;
+                }
+            }
+
+            if (!skip)
+                i += std.math.max(gs_table[j + 1], @intCast(usize, @intCast(isize, j) - bc_table[@intCast(usize, haystack[i + j])]));
+        }
+
+        return indices.toOwnedSlice();
+    }
+
     /// Return an array of indices containing substring matches for a given pattern
     /// Uses Knuth-Morris-Pratt Algorithm for string searching
     /// https://en.wikipedia.org/wiki/Knuth–Morris–Pratt_algorithm
     /// Caller owns the returned memory
-    pub fn findSubstringIndices(self: *const String, allocator: *Allocator, pattern: []const u8) anyerror![]usize {
+    fn findSubstringIndicesKmp(self: *const String, allocator: *Allocator, pattern: []const u8) ![]usize {
         var indices = ArrayList(usize).init(allocator);
         defer indices.deinit();
         if (self.isEmpty() or pattern.len < 1 or pattern.len > self.len()) {
@@ -126,8 +215,15 @@ pub const String = struct {
         return indices.toOwnedSlice();
     }
 
+    pub fn findSubstringIndices(self: *const String, allocator: *Allocator, pattern: []const u8, comptime searcher: Self.Searcher) ![]usize {
+        switch (searcher) {
+            Self.Searcher.BoyerMooreHorspool => return self.findSubstringIndicesBmh(allocator, pattern),
+            Self.Searcher.KnuthMorrisPratt => return self.findSubstringIndicesKmp(allocator, pattern),
+        }
+    }
+
     pub fn contains(self: *const String, allocator: *Allocator, pattern: []const u8) !bool {
-        var matches = try self.findSubstringIndices(allocator, pattern);
+        var matches = try self.findSubstringIndices(allocator, pattern, Self.Searcher.BoyerMooreHorspool);
         defer allocator.free(matches);
         return matches.len > 0;
     }
@@ -142,22 +238,22 @@ pub const String = struct {
         return @as([:0]const u8, self.buffer.list.items[0 .. _len - 1 :0]);
     }
 
-    pub fn trim(self: *String, trim_pattern: []const u8) anyerror!void {
+    pub fn trim(self: *String, trim_pattern: []const u8) !void {
         var trimmed_str = mem.trim(u8, self.toSliceConst(), trim_pattern);
         try self.setTrimmedStr(trimmed_str);
     }
 
-    pub fn trimLeft(self: *String, trim_pattern: []const u8) anyerror!void {
+    pub fn trimLeft(self: *String, trim_pattern: []const u8) !void {
         const trimmed_str = mem.trimLeft(u8, self.toSliceConst(), trim_pattern);
         try self.setTrimmedStr(trimmed_str);
     }
 
-    pub fn trimRight(self: *String, trim_pattern: []const u8) anyerror!void {
+    pub fn trimRight(self: *String, trim_pattern: []const u8) !void {
         const trimmed_str = mem.trimRight(u8, self.toSliceConst(), trim_pattern);
         try self.setTrimmedStr(trimmed_str);
     }
 
-    fn setTrimmedStr(self: *String, trimmed_str: []const u8) anyerror!void {
+    fn setTrimmedStr(self: *String, trimmed_str: []const u8) !void {
         const m = trimmed_str.len;
         std.debug.assert(self.len() >= m); // this should always be true
         for (trimmed_str) |v, i| {
@@ -171,12 +267,12 @@ pub const String = struct {
     }
 
     /// Replaces all occurrences of substring `old` replaced with `new` in place
-    pub fn replace(self: *String, allocator: *Allocator, old: []const u8, new: []const u8) anyerror!void {
+    pub fn replace(self: *String, allocator: *Allocator, old: []const u8, new: []const u8) !void {
         if (self.len() < 1 or old.len < 1) {
             return;
         }
 
-        var matches = try self.findSubstringIndices(allocator, old);
+        var matches = try self.findSubstringIndices(allocator, old, Self.Searcher.BoyerMooreHorspool);
         defer allocator.free(matches);
         if (matches.len < 1) {
             return;
@@ -203,8 +299,8 @@ pub const String = struct {
         try self.buffer.replaceContents(@as([]const u8, new_contents.items));
     }
 
-    pub fn count(self: *const String, allocator: *Allocator, pattern: []const u8) anyerror!usize {
-        var matches = try self.findSubstringIndices(allocator, pattern);
+    pub fn count(self: *const String, allocator: *Allocator, pattern: []const u8) !usize {
+        var matches = try self.findSubstringIndices(allocator, pattern, String.Searcher.BoyerMooreHorspool);
         return matches.len;
     }
 
@@ -298,27 +394,51 @@ test ".reverse" {
     testing.expect(s.eql("olleh"));
 }
 
-test ".findSubstringIndices" {
+test ".findSubstringIndicesBmh" {
     var buf: [1024]u8 = undefined;
     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
     var s = try String.init(allocator, "Mississippi");
     defer s.deinit();
 
-    const m1 = try s.findSubstringIndices(allocator, "i");
+    const m1 = try s.findSubstringIndices(allocator, "i", String.Searcher.BoyerMooreHorspool);
     testing.expect(mem.eql(usize, m1, &[_]usize{ 1, 4, 7, 10 }));
 
-    const m2 = try s.findSubstringIndices(allocator, "iss");
+    const m2 = try s.findSubstringIndices(allocator, "iss", String.Searcher.BoyerMooreHorspool);
     testing.expect(mem.eql(usize, m2, &[_]usize{ 1, 4 }));
 
-    const m3 = try s.findSubstringIndices(allocator, "z");
+    const m3 = try s.findSubstringIndices(allocator, "z", String.Searcher.BoyerMooreHorspool);
     testing.expect(mem.eql(usize, m3, &[_]usize{}));
 
-    const m4 = try s.findSubstringIndices(allocator, "Mississippi");
+    const m4 = try s.findSubstringIndices(allocator, "Mississippi", String.Searcher.BoyerMooreHorspool);
     testing.expect(mem.eql(usize, m4, &[_]usize{0}));
 
     var s2 = try String.init(allocator, "的中对不起我的中文不好");
     defer s2.deinit();
-    const m5 = try s2.findSubstringIndices(allocator, "的中");
+    const m5 = try s2.findSubstringIndices(allocator, "的中", String.Searcher.BoyerMooreHorspool);
+    testing.expect(mem.eql(usize, m5, &[_]usize{ 0, 18 }));
+}
+
+test ".findSubstringIndicesKmp" {
+    var buf: [1024]u8 = undefined;
+    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+    var s = try String.init(allocator, "Mississippi");
+    defer s.deinit();
+
+    const m1 = try s.findSubstringIndices(allocator, "i", String.Searcher.KnuthMorrisPratt);
+    testing.expect(mem.eql(usize, m1, &[_]usize{ 1, 4, 7, 10 }));
+
+    const m2 = try s.findSubstringIndices(allocator, "iss", String.Searcher.KnuthMorrisPratt);
+    testing.expect(mem.eql(usize, m2, &[_]usize{ 1, 4 }));
+
+    const m3 = try s.findSubstringIndices(allocator, "z", String.Searcher.KnuthMorrisPratt);
+    testing.expect(mem.eql(usize, m3, &[_]usize{}));
+
+    const m4 = try s.findSubstringIndices(allocator, "Mississippi", String.Searcher.KnuthMorrisPratt);
+    testing.expect(mem.eql(usize, m4, &[_]usize{0}));
+
+    var s2 = try String.init(allocator, "的中对不起我的中文不好");
+    defer s2.deinit();
+    const m5 = try s2.findSubstringIndices(allocator, "的中", String.Searcher.KnuthMorrisPratt);
     testing.expect(mem.eql(usize, m5, &[_]usize{ 0, 18 }));
 }
 
