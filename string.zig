@@ -36,7 +36,7 @@ fn longestPrefixSuffix(allocator: *Allocator, buffer: []const u8, pattern: []con
 
 /// Return the index of the first match for a given pattern or null.
 /// Uses `allocator` for table generation, allocating the length of `pattern`.
-pub fn findSubString(allocator: *Allocator, buffer: []const u8, pattern: []const u8) !?usize {
+pub fn findSubstring(allocator: *Allocator, buffer: []const u8, pattern: []const u8) !?usize {
     if (isEmpty(buffer) or pattern.len < 1 or pattern.len > buffer.len) {
         return null;
     }
@@ -68,7 +68,7 @@ pub fn findSubString(allocator: *Allocator, buffer: []const u8, pattern: []const
 /// Uses Knuth-Morris-Pratt Algorithm for []u8 searching
 /// https://en.wikipedia.org/wiki/Knuth–Morris–Pratt_algorithm
 /// Caller owns the returned memory
-pub fn findSubStringIndices(allocator: *Allocator, buffer: []const u8, pattern: []const u8) ![]usize {
+pub fn findSubstringIndices(allocator: *Allocator, buffer: []const u8, pattern: []const u8) ![]usize {
     var indices = ArrayList(usize).init(allocator);
     defer indices.deinit();
     if (isEmpty(buffer) or pattern.len < 1 or pattern.len > buffer.len) {
@@ -100,7 +100,7 @@ pub fn findSubStringIndices(allocator: *Allocator, buffer: []const u8, pattern: 
 }
 
 pub fn contains(allocator: *Allocator, buffer: []const u8, pattern: []const u8) !bool {
-    return null != try findSubString(allocator, buffer, pattern);
+    return null != try findSubstring(allocator, buffer, pattern);
 }
 
 pub fn toSlice(buffer: []const u8) []u8 {
@@ -145,7 +145,7 @@ pub fn replace(buffer: *[]u8, allocator: *Allocator, old: []const u8, new: []con
         return;
     }
 
-    var matches = try buffer.findSubStringIndices(allocator, old);
+    var matches = try buffer.findSubstringIndices(allocator, old);
     defer allocator.free(matches);
     if (matches.len < 1) {
         return;
@@ -173,7 +173,7 @@ pub fn replace(buffer: *[]u8, allocator: *Allocator, old: []const u8, new: []con
 }
 
 pub fn count(buffer: []const u8, allocator: *Allocator, pattern: []const u8) !usize {
-    var matches = try buffer.findSubStringIndices(allocator, pattern);
+    var matches = try buffer.findSubstringIndices(allocator, pattern);
     return matches.len;
 }
 
@@ -211,7 +211,7 @@ test "eql" {
     testing.expect(mem.eql(u8, s, "hello world"));
 }
 
-test "findSubStringIndices" {
+test "findSubstringIndices" {
     var buf: [1024]u8 = undefined;
     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
     const lit = "Mississippi";
@@ -219,23 +219,23 @@ test "findSubStringIndices" {
     mem.copy(u8, s, lit);
     defer allocator.free(s);
 
-    const m1 = try findSubStringIndices(testing.allocator, s, "i");
+    const m1 = try findSubstringIndices(testing.allocator, s, "i");
     defer testing.allocator.free(m1);
     print("{}\n", .{m1});
     testing.expect(mem.eql(usize, m1, &[_]usize{ 1, 4, 7, 10 }));
 
-    // const m2 = try s.findSubStringIndices(allocator, "iss");
+    // const m2 = try s.findSubstringIndices(allocator, "iss");
     // testing.expect(mem.eql(usize, m2, [_]usize{ 1, 4 }));
 
-    // const m3 = try s.findSubStringIndices(allocator, "z");
+    // const m3 = try s.findSubstringIndices(allocator, "z");
     // testing.expect(mem.eql(usize, m3, [_]usize{}));
 
-    // const m4 = try s.findSubStringIndices(allocator, "Mississippi");
+    // const m4 = try s.findSubstringIndices(allocator, "Mississippi");
     // testing.expect(mem.eql(usize, m4, [_]usize{0}));
 
     // var s2 = try []u8.init(allocator, "的中对不起我的中文不好");
     // defer s2.deinit();
-    // const m5 = try s2.findSubStringIndices(allocator, "的中");
+    // const m5 = try s2.findSubstringIndices(allocator, "的中");
     // testing.expect(mem.eql(usize, m5, [_]usize{ 0, 18 }));
 }
 
@@ -253,159 +253,159 @@ test ".contains" {
     testing.expect(m4);
 }
 
-test ".toSlice" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "hello world");
-    defer s.deinit();
-    testing.expect(mem.eql(u8, "hello world", s.toSlice()));
-}
+// test ".toSlice" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "hello world");
+//     defer s.deinit();
+//     testing.expect(mem.eql(u8, "hello world", s.toSlice()));
+// }
 
-test ".toSliceConst" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "hello world");
-    defer s.deinit();
-    testing.expect(mem.eql(u8, "hello world", s.toSliceConst()));
-}
+// test ".toSliceConst" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "hello world");
+//     defer s.deinit();
+//     testing.expect(mem.eql(u8, "hello world", s.toSliceConst()));
+// }
 
-test ".trim" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, " foo\n ");
-    defer s.deinit();
-    try s.trim(" \n");
-    testing.expectEqualSlices(u8, "foo", s.toSliceConst());
-    testing.expect(3 == s.len);
-    try s.trim(" \n");
-    testing.expectEqualSlices(u8, "foo", s.toSliceConst());
-}
+// test ".trim" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, " foo\n ");
+//     defer s.deinit();
+//     try s.trim(" \n");
+//     testing.expectEqualSlices(u8, "foo", s.toSliceConst());
+//     testing.expect(3 == s.len);
+//     try s.trim(" \n");
+//     testing.expectEqualSlices(u8, "foo", s.toSliceConst());
+// }
 
-test ".trimLeft" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, " foo\n ");
-    defer s.deinit();
-    try s.trimLeft(" \n");
-    testing.expectEqualSlices(u8, "foo\n ", s.toSliceConst());
-}
+// test ".trimLeft" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, " foo\n ");
+//     defer s.deinit();
+//     try s.trimLeft(" \n");
+//     testing.expectEqualSlices(u8, "foo\n ", s.toSliceConst());
+// }
 
-test ".trimRight" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, " foo\n ");
-    defer s.deinit();
-    try s.trimRight(" \n");
-    testing.expectEqualSlices(u8, " foo", s.toSliceConst());
-}
+// test ".trimRight" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, " foo\n ");
+//     defer s.deinit();
+//     try s.trimRight(" \n");
+//     testing.expectEqualSlices(u8, " foo", s.toSliceConst());
+// }
 
-test ".split" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "abc|def||ghi");
-    defer s.deinit();
+// test ".split" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "abc|def||ghi");
+//     defer s.deinit();
 
-    // All of these tests are from std/mem.zig
-    var it = s.split("|");
-    testing.expect(mem.eql(u8, it.next().?, "abc"));
-    testing.expect(mem.eql(u8, it.next().?, "def"));
-    testing.expect(mem.eql(u8, it.next().?, ""));
-    testing.expect(mem.eql(u8, it.next().?, "ghi"));
-    testing.expect(it.next() == null);
+//     // All of these tests are from std/mem.zig
+//     var it = s.split("|");
+//     testing.expect(mem.eql(u8, it.next().?, "abc"));
+//     testing.expect(mem.eql(u8, it.next().?, "def"));
+//     testing.expect(mem.eql(u8, it.next().?, ""));
+//     testing.expect(mem.eql(u8, it.next().?, "ghi"));
+//     testing.expect(it.next() == null);
 
-    try s.buffer.replaceContents("");
-    it = s.split("|");
-    testing.expect(mem.eql(u8, it.next().?, ""));
-    testing.expect(it.next() == null);
+//     try s.buffer.replaceContents("");
+//     it = s.split("|");
+//     testing.expect(mem.eql(u8, it.next().?, ""));
+//     testing.expect(it.next() == null);
 
-    try s.buffer.replaceContents("|");
-    it = s.split("|");
-    testing.expect(mem.eql(u8, it.next().?, ""));
-    testing.expect(mem.eql(u8, it.next().?, ""));
-    testing.expect(it.next() == null);
-}
+//     try s.buffer.replaceContents("|");
+//     it = s.split("|");
+//     testing.expect(mem.eql(u8, it.next().?, ""));
+//     testing.expect(mem.eql(u8, it.next().?, ""));
+//     testing.expect(it.next() == null);
+// }
 
-test ".replace" {
-    var buf: [1024]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "Mississippi");
-    defer s.deinit();
-    try s.replace(allocator, "iss", "e");
-    testing.expectEqualSlices(u8, "Meeippi", s.toSliceConst());
+// test ".replace" {
+//     var buf: [1024]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "Mississippi");
+//     defer s.deinit();
+//     try s.replace(allocator, "iss", "e");
+//     testing.expectEqualSlices(u8, "Meeippi", s.toSliceConst());
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(allocator, "iss", "issi");
-    testing.expectEqualSlices(u8, "Missiissiippi", s.toSliceConst());
+//     try s.buffer.replaceContents("Mississippi");
+//     try s.replace(allocator, "iss", "issi");
+//     testing.expectEqualSlices(u8, "Missiissiippi", s.toSliceConst());
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(allocator, "i", "a");
-    testing.expectEqualSlices(u8, "Massassappa", s.toSliceConst());
+//     try s.buffer.replaceContents("Mississippi");
+//     try s.replace(allocator, "i", "a");
+//     testing.expectEqualSlices(u8, "Massassappa", s.toSliceConst());
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(allocator, "iss", "");
-    testing.expectEqualSlices(u8, "Mippi", s.toSliceConst());
+//     try s.buffer.replaceContents("Mississippi");
+//     try s.replace(allocator, "iss", "");
+//     testing.expectEqualSlices(u8, "Mippi", s.toSliceConst());
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(allocator, s.toSliceConst(), "Foo");
-    testing.expectEqualSlices(u8, "Foo", s.toSliceConst());
-}
+//     try s.buffer.replaceContents("Mississippi");
+//     try s.replace(allocator, s.toSliceConst(), "Foo");
+//     testing.expectEqualSlices(u8, "Foo", s.toSliceConst());
+// }
 
-test ".count" {
-    var buf: [1024]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "Mississippi");
-    defer s.deinit();
-    const c1 = try s.count(allocator, "i");
-    testing.expect(c1 == 4);
+// test ".count" {
+//     var buf: [1024]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "Mississippi");
+//     defer s.deinit();
+//     const c1 = try s.count(allocator, "i");
+//     testing.expect(c1 == 4);
 
-    const c2 = try s.count(allocator, "M");
-    testing.expect(c2 == 1);
+//     const c2 = try s.count(allocator, "M");
+//     testing.expect(c2 == 1);
 
-    const c3 = try s.count(allocator, "abc");
-    testing.expect(c3 == 0);
+//     const c3 = try s.count(allocator, "abc");
+//     testing.expect(c3 == 0);
 
-    const c4 = try s.count(allocator, "iss");
-    testing.expect(c4 == 2);
-}
+//     const c4 = try s.count(allocator, "iss");
+//     testing.expect(c4 == 2);
+// }
 
-test ".toLower" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "ABCDEF");
-    defer s.deinit();
-    s.toLower();
-    testing.expectEqualSlices(u8, "abcdef", s.toSliceConst());
+// test ".toLower" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "ABCDEF");
+//     defer s.deinit();
+//     s.toLower();
+//     testing.expectEqualSlices(u8, "abcdef", s.toSliceConst());
 
-    try s.buffer.replaceContents("的ABcdEF中");
-    s.toLower();
-    testing.expectEqualSlices(u8, "的abcdef中", s.toSliceConst());
+//     try s.buffer.replaceContents("的ABcdEF中");
+//     s.toLower();
+//     testing.expectEqualSlices(u8, "的abcdef中", s.toSliceConst());
 
-    try s.buffer.replaceContents("AB的cd中EF");
-    s.toLower();
-    testing.expectEqualSlices(u8, "ab的cd中ef", s.toSliceConst());
-}
+//     try s.buffer.replaceContents("AB的cd中EF");
+//     s.toLower();
+//     testing.expectEqualSlices(u8, "ab的cd中ef", s.toSliceConst());
+// }
 
-test ".toUpper" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "abcdef");
-    defer s.deinit();
-    s.toUpper();
-    testing.expectEqualSlices(u8, "ABCDEF", s.toSliceConst());
+// test ".toUpper" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "abcdef");
+//     defer s.deinit();
+//     s.toUpper();
+//     testing.expectEqualSlices(u8, "ABCDEF", s.toSliceConst());
     
-    try s.buffer.replaceContents("的abCDef中");
-    s.toUpper();
-    testing.expectEqualSlices(u8, "的ABCDEF中", s.toSliceConst());
+//     try s.buffer.replaceContents("的abCDef中");
+//     s.toUpper();
+//     testing.expectEqualSlices(u8, "的ABCDEF中", s.toSliceConst());
 
-    try s.buffer.replaceContents("ab的CD中ef");
-    s.toUpper();
-    testing.expectEqualSlices(u8, "AB的CD中EF", s.toSliceConst());
-}
+//     try s.buffer.replaceContents("ab的CD中ef");
+//     s.toUpper();
+//     testing.expectEqualSlices(u8, "AB的CD中EF", s.toSliceConst());
+// }
 
-test ".ptr" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try []u8.init(allocator, "abcdef");
-    defer s.deinit();
-    testing.expect(mem.eql(u8, mem.toSliceConst(u8, s.ptr()), s.toSliceConst()));
-}
+// test ".ptr" {
+//     var buf: [256]u8 = undefined;
+//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
+//     var s = try []u8.init(allocator, "abcdef");
+//     defer s.deinit();
+//     testing.expect(mem.eql(u8, mem.toSliceConst(u8, s.ptr()), s.toSliceConst()));
+// }
