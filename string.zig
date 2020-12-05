@@ -12,8 +12,12 @@ pub fn isEmpty(buffer: []const u8) bool {
 }
 
 /// Caller owns the returned memory
-fn longestPrefixSuffix(allocator: *Allocator, buffer: []const u8, pattern: []const u8) ![]usize {
-    var lps = try allocator.alloc(usize, pattern.len);    
+pub fn longestPrefixSuffix(allocator: *Allocator, pattern: []const u8) ![]usize {
+    var lps = try allocator.alloc(usize, pattern.len);
+    for (lps) |*i| {
+        i.* = 0;
+    }
+
     // Left and right positions going through the pattern
     var left: usize = 0;
     var right: usize = 1;
@@ -41,7 +45,7 @@ pub fn findSubstring(allocator: *Allocator, buffer: []const u8, pattern: []const
         return null;
     }
 
-    var lps = try longestPrefixSuffix(allocator, buffer, pattern);
+    var lps = try longestPrefixSuffix(allocator, pattern);
     defer allocator.free(lps);
 
     var str_index: usize = 0;
@@ -64,10 +68,11 @@ pub fn findSubstring(allocator: *Allocator, buffer: []const u8, pattern: []const
     return null;
 }
 
-/// Return an array of indices containing sub[]u8 matches for a given pattern
-/// Uses Knuth-Morris-Pratt Algorithm for []u8 searching
+/// Return an array of indices containing substring matches for a given pattern
+/// Uses Knuth-Morris-Pratt Algorithm for string searching
 /// https://en.wikipedia.org/wiki/Knuth–Morris–Pratt_algorithm
-/// Caller owns the returned memory
+/// Caller owns the returned memory.
+/// Currently doesn't find overlapping patterns.
 pub fn findSubstringIndices(allocator: *Allocator, buffer: []const u8, pattern: []const u8) ![]usize {
     var indices = ArrayList(usize).init(allocator);
     defer indices.deinit();
@@ -75,7 +80,7 @@ pub fn findSubstringIndices(allocator: *Allocator, buffer: []const u8, pattern: 
         return indices.items;
     }
 
-    var lps = try longestPrefixSuffix(allocator, buffer, pattern);
+    var lps = try longestPrefixSuffix(allocator, pattern);
     defer allocator.free(lps);
 
     var str_index: usize = 0;
@@ -92,7 +97,9 @@ pub fn findSubstringIndices(allocator: *Allocator, buffer: []const u8, pattern: 
             }
         }
         if (pat_index == pattern.len) {
-            try indices.append(str_index - pattern.len);
+            try indices.append(str_index - pat_index);
+            // Shift backwards to check overlapping substrings
+            str_index -= lps[pat_index - 1];
             pat_index = 0;
         }
     }
@@ -103,44 +110,9 @@ pub fn contains(allocator: *Allocator, buffer: []const u8, pattern: []const u8) 
     return null != try findSubstring(allocator, buffer, pattern);
 }
 
-pub fn toSlice(buffer: []const u8) []u8 {
-    return buffer.toSlice();
-}
-
-pub fn toSliceConst(buffer: []const u8) []const u8 {
-    return buffer.toSliceConst();
-}
-
-pub fn trim(buffer: *[]u8, trim_pattern: []const u8) !void {
-    var trimmed_str = mem.trim(u8, buffer.toSliceConst(), trim_pattern);
-    try buffer.setTrimmedStr(trimmed_str);
-}
-
-pub fn trimLeft(buffer: *[]u8, trim_pattern: []const u8) !void {
-    const trimmed_str = mem.trimLeft(u8, buffer.toSliceConst(), trim_pattern);
-    try buffer.setTrimmedStr(trimmed_str);
-}
-
-pub fn trimRight(buffer: *[]u8, trim_pattern: []const u8) !void {
-    const trimmed_str = mem.trimRight(u8, buffer.toSliceConst(), trim_pattern);
-    try buffer.setTrimmedStr(trimmed_str);
-}
-
-fn setTrimmedStr(buffer: *[]u8, trimmed_str: []const u8) !void {
-    const m = trimmed_str.len;
-    std.debug.assert(buffer.len >= m); // this should always be true
-    for (trimmed_str) |v, i| {
-        buffer.list.set(i, v);
-    }
-    try buffer.resize(m);
-}
-
-pub fn split(buffer: []const u8, delimiter: []const u8) mem.SplitIterator {
-    return mem.separate(buffer.toSliceConst(), delimiter);
-}
-
-/// Replaces all occurrences of sub[]u8 `old` replaced with `new` in place
-pub fn replace(buffer: *[]u8, allocator: *Allocator, old: []const u8, new: []const u8) !void {
+/// Replaces all occurrences of substring `old` replaced with `new` in place
+pub fn replace(allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []const u8) !void {
+    // TODO: implement a version without allocator when old and new have the same length
     if (buffer.len < 1 or old.len < 1) {
         return;
     }
@@ -164,7 +136,7 @@ pub fn replace(buffer: *[]u8, allocator: *Allocator, old: []const u8, new: []con
             try new_contents.append(val);
         }
     }
-    // Append end of []u8 if match does not end original []u8
+    // Append end of string if match does not end original string
     while (orig_index < buffer.len) {
         try new_contents.append(buffer.at(orig_index));
         orig_index += 1;
@@ -172,240 +144,116 @@ pub fn replace(buffer: *[]u8, allocator: *Allocator, old: []const u8, new: []con
     try buffer.replaceContents(new_contents.toSliceConst());
 }
 
-pub fn count(buffer: []const u8, allocator: *Allocator, pattern: []const u8) !usize {
-    var matches = try buffer.findSubstringIndices(allocator, pattern);
+pub fn count(allocator: *Allocator, buffer: []const u8, pattern: []const u8) !usize {
+    var matches = try findSubstringIndices(allocator, buffer, pattern);
+    defer allocator.free(matches);
     return matches.len;
-}
-
-/// Only makes ASCII characters lowercase
-pub fn toLower(buffer: *[]u8) void {
-    for (buffer.toSlice()) |*c| {
-        c.* = ascii.toLower(c.*);
-    }
-}
-
-/// Only makes ASCII characters uppercase
-pub fn toUpper(buffer: *[]u8) void {
-    for (buffer.toSlice()) |*c| {
-        c.* = ascii.toUpper(c.*);
-    }
 }
 
 
 const testing = std.testing;
-const print = std.debug.print;
+const expect = testing.expect;
 
 test "isEmpty" {
     var s = "hello";
-    std.testing.expect(!isEmpty(s));
+    expect(!isEmpty(s));
 }
 
 test "eql" {
-    var buf: [256]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    var s = try allocator.alloc(u8, 11);
-    defer allocator.free(s);
+    var s = try testing.allocator.alloc(u8, 11);
+    defer testing.allocator.free(s);
     
     mem.copy(u8, s, "hello world");
 
-    testing.expect(mem.eql(u8, s, "hello world"));
+    expect(mem.eql(u8, s, "hello world"));
+}
+
+test "longestPrefixSuffix" {
+    const lps = try longestPrefixSuffix(testing.allocator, "issi");
+    defer testing.allocator.free(lps);
 }
 
 test "findSubstringIndices" {
-    var buf: [1024]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-    const lit = "Mississippi";
-    var s = try allocator.alloc(u8, lit.len);
-    mem.copy(u8, s, lit);
-    defer allocator.free(s);
+    const s = "Mississippi";
 
     const m1 = try findSubstringIndices(testing.allocator, s, "i");
     defer testing.allocator.free(m1);
-    print("{}\n", .{m1});
-    testing.expect(mem.eql(usize, m1, &[_]usize{ 1, 4, 7, 10 }));
+    expect(mem.eql(usize, m1, &[_]usize{ 1, 4, 7, 10 }));
 
-    // const m2 = try s.findSubstringIndices(allocator, "iss");
-    // testing.expect(mem.eql(usize, m2, [_]usize{ 1, 4 }));
+    const m2 = try findSubstringIndices(testing.allocator, s, "iss");
+    defer testing.allocator.free(m2);
+    expect(mem.eql(usize, m2, &[_]usize{ 1, 4 }));
 
-    // const m3 = try s.findSubstringIndices(allocator, "z");
-    // testing.expect(mem.eql(usize, m3, [_]usize{}));
+    // TODO: make this pass
+    const m3 = try findSubstringIndices(testing.allocator, s, "issi");
+    defer testing.allocator.free(m3);
+    expect(mem.eql(usize, m3, &[_]usize{ 1, 4 }));
+    
+    const m4 = try findSubstringIndices(testing.allocator, s, "z");
+    defer testing.allocator.free(m4);
+    expect(mem.eql(usize, m4, &[_]usize{ }));
 
-    // const m4 = try s.findSubstringIndices(allocator, "Mississippi");
-    // testing.expect(mem.eql(usize, m4, [_]usize{0}));
+    const m5 = try findSubstringIndices(testing.allocator, s, "Mississippi");
+    defer testing.allocator.free(m5);
+    expect(mem.eql(usize, m5, &[_]usize{ 0 }));
 
-    // var s2 = try []u8.init(allocator, "的中对不起我的中文不好");
-    // defer s2.deinit();
-    // const m5 = try s2.findSubstringIndices(allocator, "的中");
-    // testing.expect(mem.eql(usize, m5, [_]usize{ 0, 18 }));
+    var s2 = "的中对不起我的中文不好";
+    const m6 = try findSubstringIndices(testing.allocator, s2, "的中");
+    defer testing.allocator.free(m6);
+    expect(mem.eql(usize, m6, &[_]usize{ 0, 18 }));
 }
 
-test ".contains" {
+test "contains" {
     const m1 = try contains(testing.allocator, "Mississippi", "i");
-    testing.expect(m1);
+    expect(m1);
 
     const m2 = try contains(testing.allocator, "Mississippi", "iss");
-    testing.expect(m2);
+    expect(m2);
     
     const m3 = try contains(testing.allocator, "Mississippi", "z");
-    testing.expect(!m3);
+    expect(!m3);
 
     const m4 = try contains(testing.allocator, "Mississippi", "Mississippi");
-    testing.expect(m4);
+    expect(m4);
 }
 
-// test ".toSlice" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "hello world");
-//     defer s.deinit();
-//     testing.expect(mem.eql(u8, "hello world", s.toSlice()));
-// }
+test "replace" {
+    var s = "Mississippi";
 
-// test ".toSliceConst" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "hello world");
-//     defer s.deinit();
-//     testing.expect(mem.eql(u8, "hello world", s.toSliceConst()));
-// }
+    try replace(testing.allocator, s, "iss", "e");
+    expectEqualSlices(u8, "Meeippi", s.toSliceConst());
 
-// test ".trim" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, " foo\n ");
-//     defer s.deinit();
-//     try s.trim(" \n");
-//     testing.expectEqualSlices(u8, "foo", s.toSliceConst());
-//     testing.expect(3 == s.len);
-//     try s.trim(" \n");
-//     testing.expectEqualSlices(u8, "foo", s.toSliceConst());
-// }
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(testing.allocator, "iss", "issi");
+    expectEqualSlices(u8, "Missiissiippi", s.toSliceConst());
 
-// test ".trimLeft" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, " foo\n ");
-//     defer s.deinit();
-//     try s.trimLeft(" \n");
-//     testing.expectEqualSlices(u8, "foo\n ", s.toSliceConst());
-// }
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(testing.allocator, "i", "a");
+    expectEqualSlices(u8, "Massassappa", s.toSliceConst());
 
-// test ".trimRight" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, " foo\n ");
-//     defer s.deinit();
-//     try s.trimRight(" \n");
-//     testing.expectEqualSlices(u8, " foo", s.toSliceConst());
-// }
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(testing.allocator, "iss", "");
+    expectEqualSlices(u8, "Mippi", s.toSliceConst());
 
-// test ".split" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "abc|def||ghi");
-//     defer s.deinit();
+    try s.buffer.replaceContents("Mississippi");
+    try s.replace(testing.allocator, s.toSliceConst(), "Foo");
+    expectEqualSlices(u8, "Foo", s.toSliceConst());
+}
 
-//     // All of these tests are from std/mem.zig
-//     var it = s.split("|");
-//     testing.expect(mem.eql(u8, it.next().?, "abc"));
-//     testing.expect(mem.eql(u8, it.next().?, "def"));
-//     testing.expect(mem.eql(u8, it.next().?, ""));
-//     testing.expect(mem.eql(u8, it.next().?, "ghi"));
-//     testing.expect(it.next() == null);
+test "count" {
+    var s = "Mississippi";
+    const c1 = try count(testing.allocator, s, "i");
+    expect(c1 == 4);
 
-//     try s.buffer.replaceContents("");
-//     it = s.split("|");
-//     testing.expect(mem.eql(u8, it.next().?, ""));
-//     testing.expect(it.next() == null);
+    const c2 = try count(testing.allocator, s, "M");
+    expect(c2 == 1);
 
-//     try s.buffer.replaceContents("|");
-//     it = s.split("|");
-//     testing.expect(mem.eql(u8, it.next().?, ""));
-//     testing.expect(mem.eql(u8, it.next().?, ""));
-//     testing.expect(it.next() == null);
-// }
+    const c3 = try count(testing.allocator, s, "abc");
+    expect(c3 == 0);
 
-// test ".replace" {
-//     var buf: [1024]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "Mississippi");
-//     defer s.deinit();
-//     try s.replace(allocator, "iss", "e");
-//     testing.expectEqualSlices(u8, "Meeippi", s.toSliceConst());
+    const c4 = try count(testing.allocator, s, "iss");
+    expect(c4 == 2);
 
-//     try s.buffer.replaceContents("Mississippi");
-//     try s.replace(allocator, "iss", "issi");
-//     testing.expectEqualSlices(u8, "Missiissiippi", s.toSliceConst());
-
-//     try s.buffer.replaceContents("Mississippi");
-//     try s.replace(allocator, "i", "a");
-//     testing.expectEqualSlices(u8, "Massassappa", s.toSliceConst());
-
-//     try s.buffer.replaceContents("Mississippi");
-//     try s.replace(allocator, "iss", "");
-//     testing.expectEqualSlices(u8, "Mippi", s.toSliceConst());
-
-//     try s.buffer.replaceContents("Mississippi");
-//     try s.replace(allocator, s.toSliceConst(), "Foo");
-//     testing.expectEqualSlices(u8, "Foo", s.toSliceConst());
-// }
-
-// test ".count" {
-//     var buf: [1024]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "Mississippi");
-//     defer s.deinit();
-//     const c1 = try s.count(allocator, "i");
-//     testing.expect(c1 == 4);
-
-//     const c2 = try s.count(allocator, "M");
-//     testing.expect(c2 == 1);
-
-//     const c3 = try s.count(allocator, "abc");
-//     testing.expect(c3 == 0);
-
-//     const c4 = try s.count(allocator, "iss");
-//     testing.expect(c4 == 2);
-// }
-
-// test ".toLower" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "ABCDEF");
-//     defer s.deinit();
-//     s.toLower();
-//     testing.expectEqualSlices(u8, "abcdef", s.toSliceConst());
-
-//     try s.buffer.replaceContents("的ABcdEF中");
-//     s.toLower();
-//     testing.expectEqualSlices(u8, "的abcdef中", s.toSliceConst());
-
-//     try s.buffer.replaceContents("AB的cd中EF");
-//     s.toLower();
-//     testing.expectEqualSlices(u8, "ab的cd中ef", s.toSliceConst());
-// }
-
-// test ".toUpper" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "abcdef");
-//     defer s.deinit();
-//     s.toUpper();
-//     testing.expectEqualSlices(u8, "ABCDEF", s.toSliceConst());
-    
-//     try s.buffer.replaceContents("的abCDef中");
-//     s.toUpper();
-//     testing.expectEqualSlices(u8, "的ABCDEF中", s.toSliceConst());
-
-//     try s.buffer.replaceContents("ab的CD中ef");
-//     s.toUpper();
-//     testing.expectEqualSlices(u8, "AB的CD中EF", s.toSliceConst());
-// }
-
-// test ".ptr" {
-//     var buf: [256]u8 = undefined;
-//     const allocator = &std.heap.FixedBufferAllocator.init(&buf).allocator;
-//     var s = try []u8.init(allocator, "abcdef");
-//     defer s.deinit();
-//     testing.expect(mem.eql(u8, mem.toSliceConst(u8, s.ptr()), s.toSliceConst()));
-// }
+    const c5 = try count(testing.allocator, s, "issi");
+    expect(c5 == 2);
+}
