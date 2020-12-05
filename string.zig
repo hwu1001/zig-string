@@ -117,7 +117,7 @@ pub fn replace(allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []con
         return;
     }
 
-    var matches = try buffer.findSubstringIndices(allocator, old);
+    var matches = try findSubstringIndices(allocator, buffer.*, old);
     defer allocator.free(matches);
     if (matches.len < 1) {
         return;
@@ -128,7 +128,7 @@ pub fn replace(allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []con
     var orig_index: usize = 0;
     for (matches) |match_index| {
         while (orig_index < match_index) {
-            try new_contents.append(buffer.at(orig_index));
+            try new_contents.append(buffer[orig_index]);
             orig_index += 1;
         }
         orig_index = match_index + old.len;
@@ -218,8 +218,9 @@ test "contains" {
 }
 
 test "replace" {
-    var s = "Mississippi";
-
+    var s: *[]u8 = undefined;
+    mem.copy(u8, s.*, "Mississippi");
+    
     try replace(testing.allocator, s, "iss", "e");
     expectEqualSlices(u8, "Meeippi", s.toSliceConst());
 
