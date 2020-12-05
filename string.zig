@@ -4,15 +4,20 @@ const ascii = std.ascii;
 const Allocator = mem.Allocator;
 const ArrayList = std.ArrayList;
 
-
+/// Alias for `buffer.len == 0`
 pub fn isEmpty(buffer: []const u8) bool {
     // Can't use Buffer.isNull because Buffer maintains a null byte at the
     // end. (e.g., []u8 of "" in a Buffer is not null)
     return buffer.len == 0;
 }
 
-/// Caller owns the returned memory
-pub fn longestPrefixSuffix(allocator: *Allocator, pattern: []const u8) ![]usize {
+/// Computes an integer for each character in `pattern` representing how far
+/// back in a haystack searching must resume after failure. Also known as the
+/// failure function.
+/// Caller owns the returned memory.
+pub fn longestPrefixSuffix(
+    allocator: *Allocator, pattern: []const u8
+) error{OutOfMemory}![]usize {
     var lps = try allocator.alloc(usize, pattern.len);
     for (lps) |*i| {
         i.* = 0;
@@ -40,7 +45,9 @@ pub fn longestPrefixSuffix(allocator: *Allocator, pattern: []const u8) ![]usize 
 
 /// Return the index of the first match for a given pattern or null.
 /// Uses `allocator` for table generation, allocating the length of `pattern`.
-pub fn findSubstring(allocator: *Allocator, buffer: []const u8, pattern: []const u8) !?usize {
+pub fn findSubstring(
+    allocator: *Allocator, buffer: []const u8, pattern: []const u8
+) !?usize {
     if (isEmpty(buffer) or pattern.len < 1 or pattern.len > buffer.len) {
         return null;
     }
@@ -68,12 +75,13 @@ pub fn findSubstring(allocator: *Allocator, buffer: []const u8, pattern: []const
     return null;
 }
 
-/// Return an array of indices containing substring matches for a given pattern
-/// Uses Knuth-Morris-Pratt Algorithm for string searching
+/// Return an array of indices containing substring matches for a given 
+/// pattern. Uses Knuth-Morris-Pratt Algorithm for string searching.
 /// https://en.wikipedia.org/wiki/Knuth–Morris–Pratt_algorithm
 /// Caller owns the returned memory.
-/// Currently doesn't find overlapping patterns.
-pub fn findSubstringIndices(allocator: *Allocator, buffer: []const u8, pattern: []const u8) ![]usize {
+pub fn findSubstringIndices(
+    allocator: *Allocator, buffer: []const u8, pattern: []const u8
+) ![]usize {
     var indices = ArrayList(usize).init(allocator);
     defer indices.deinit();
     if (isEmpty(buffer) or pattern.len < 1 or pattern.len > buffer.len) {
@@ -106,13 +114,28 @@ pub fn findSubstringIndices(allocator: *Allocator, buffer: []const u8, pattern: 
     return indices.toOwnedSlice();
 }
 
-pub fn contains(allocator: *Allocator, buffer: []const u8, pattern: []const u8) !bool {
+/// Checks that `pattern` occurs at least once in `buffer` as a substring.
+pub fn contains(
+    allocator: *Allocator, buffer: []const u8, pattern: []const u8
+) !bool {
     return null != try findSubstring(allocator, buffer, pattern);
 }
 
+/// Counts occurrences of `pattern` in `buffer`, including those that overlap.
+pub fn count(
+    allocator: *Allocator, buffer: []const u8, pattern: []const u8
+) !usize {
+    var matches = try findSubstringIndices(allocator, buffer, pattern);
+    defer allocator.free(matches);
+    return matches.len;
+}
+
+// TODO: implement a version without an allocator when old and new have the
+//  same length
 /// Replaces all occurrences of substring `old` replaced with `new` in place
-pub fn replace(allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []const u8) !void {
-    // TODO: implement a version without allocator when old and new have the same length
+pub fn replace(
+    allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []const u8
+) !void {
     if (buffer.len < 1 or old.len < 1) {
         return;
     }
@@ -128,7 +151,7 @@ pub fn replace(allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []con
     var orig_index: usize = 0;
     for (matches) |match_index| {
         while (orig_index < match_index) {
-            try new_contents.append(buffer[orig_index]);
+            try new_contents.append(buffer.*[orig_index]);
             orig_index += 1;
         }
         orig_index = match_index + old.len;
@@ -138,21 +161,15 @@ pub fn replace(allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []con
     }
     // Append end of string if match does not end original string
     while (orig_index < buffer.len) {
-        try new_contents.append(buffer.at(orig_index));
+        try new_contents.append(buffer.*[orig_index]);
         orig_index += 1;
     }
-    try buffer.replaceContents(new_contents.toSliceConst());
-}
-
-pub fn count(allocator: *Allocator, buffer: []const u8, pattern: []const u8) !usize {
-    var matches = try findSubstringIndices(allocator, buffer, pattern);
-    defer allocator.free(matches);
-    return matches.len;
 }
 
 
 const testing = std.testing;
 const expect = testing.expect;
+const span = mem.span;
 
 test "isEmpty" {
     var s = "hello";
@@ -218,27 +235,29 @@ test "contains" {
 }
 
 test "replace" {
-    var s: *[]u8 = undefined;
-    mem.copy(u8, s.*, "Mississippi");
+    var s = try testing.allocator.alloc(u8, 11);
+    defer testing.allocator.free(s);
+    mem.copy(u8, s, "Mississippi");
     
-    try replace(testing.allocator, s, "iss", "e");
-    expectEqualSlices(u8, "Meeippi", s.toSliceConst());
+    try replace(testing.allocator, &s, "iss", "e");
+    std.debug.print("{}\n", .{s});
+    expect(mem.eql(u8, "Meeippi", span(s)));
+    mem.copy(u8, s, "Mississippi");
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(testing.allocator, "iss", "issi");
-    expectEqualSlices(u8, "Missiissiippi", s.toSliceConst());
+    try replace(testing.allocator, &s, "iss", "issi");
+    expect(mem.eql(u8, "Missiissiippi", s));
+    mem.copy(u8, s, "Mississippi");
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(testing.allocator, "i", "a");
-    expectEqualSlices(u8, "Massassappa", s.toSliceConst());
+    try replace(testing.allocator, &s, "i", "a");
+    expect(mem.eql(u8, "Massassappa", span(s)));
+    mem.copy(u8, s, "Mississippi");
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(testing.allocator, "iss", "");
-    expectEqualSlices(u8, "Mippi", s.toSliceConst());
+    try replace(testing.allocator, &s, "iss", "");
+    expect(mem.eql(u8, "Mippi", span(s)));
+    mem.copy(u8, s, "Mississippi");
 
-    try s.buffer.replaceContents("Mississippi");
-    try s.replace(testing.allocator, s.toSliceConst(), "Foo");
-    expectEqualSlices(u8, "Foo", s.toSliceConst());
+    try replace(testing.allocator, &s, "Foo", "g");
+    expect(mem.eql(u8, "", span(s)));
 }
 
 test "count" {
