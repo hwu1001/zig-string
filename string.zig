@@ -148,21 +148,21 @@ pub fn replace(
     var new_contents = ArrayList(u8).init(allocator);
     defer new_contents.deinit();
 
-    var orig_index: usize = 0;
-    for (matches) |match_index| {
-        while (orig_index < match_index) {
-            try new_contents.append(buffer.*[orig_index]);
-            orig_index += 1;
+    var original: usize = 0;
+    for (matches) |match| {
+        while (original < match) {
+            try new_contents.append(buffer.*[original]);
+            original += 1;
         }
-        orig_index = match_index + old.len;
+        original = match + old.len;
         for (new) |val| {
             try new_contents.append(val);
         }
     }
     // Append end of string if match does not end original string
-    while (orig_index < buffer.len) {
-        try new_contents.append(buffer.*[orig_index]);
-        orig_index += 1;
+    while (original < buffer.len) {
+        try new_contents.append(buffer.*[original]);
+        original += 1;
     }
 }
 
@@ -174,20 +174,15 @@ const span = mem.span;
 test "isEmpty" {
     var s = "hello";
     expect(!isEmpty(s));
+    var s1 = "";
+    expect(isEmpty(s1));
 }
 
-test "eql" {
-    var s = try testing.allocator.alloc(u8, 11);
-    defer testing.allocator.free(s);
-    
-    mem.copy(u8, s, "hello world");
-
-    expect(mem.eql(u8, s, "hello world"));
-}
 
 test "longestPrefixSuffix" {
     const lps = try longestPrefixSuffix(testing.allocator, "issi");
     defer testing.allocator.free(lps);
+    expect(mem.eql(usize, lps, &[_]usize{ 0, 0, 0, 1 }));
 }
 
 test "findSubstringIndices" {
@@ -245,7 +240,7 @@ test "replace" {
     mem.copy(u8, s, "Mississippi");
 
     try replace(testing.allocator, &s, "iss", "issi");
-    expect(mem.eql(u8, "Missiissiippi", s));
+    expect(mem.eql(u8, "Missiissiippi", span(s)));
     mem.copy(u8, s, "Mississippi");
 
     try replace(testing.allocator, &s, "i", "a");
