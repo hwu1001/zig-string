@@ -1,5 +1,3 @@
-// # TODO: generic buffers instead of only u8
-
 const std = @import("std");
 const mem = std.mem;
 const ascii = std.ascii;
@@ -152,6 +150,40 @@ pub fn replace(
     var new_contents = ArrayList(u8).init(allocator);
     defer new_contents.deinit();
 
+    // Append end of string if match does not end original string
+    var previous_match: usize = 0;
+    if (new.len > old.len) {
+        // for (matches) |match| {
+            // try new_contents.appendSlice(new);
+        // }
+
+    } else {
+        for (matches) |match| {
+            try new_contents.appendSlice(buffer[previous_match..match - previous_match]);
+            try new_contents.appendSlice(new);
+            // Only need to handle old value being less than new,
+            // as we are appending.
+            previous_match = match;
+        }
+    }
+    
+    return new_contents.toOwnedSlice();
+}
+
+pub fn replaceInplace(
+    allocator: *Allocator, buffer: []u8, old: []const u8, new: []const u8
+) error{OutOfMemory}!void {
+    comptime expect(old.len == new.len);
+    if (buffer.len < 1 or old.len < 1) {
+        return;
+    }
+
+    var matches = try findSubstringIndices(allocator, buffer, old);
+    defer allocator.free(matches);
+    if (matches.len < 1) {
+        return;
+    }
+
     var original: usize = 0;
     for (matches) |match| {
         while (original < match) {
@@ -163,13 +195,6 @@ pub fn replace(
             try new_contents.append(val);
         }
     }
-    // Append end of string if match does not end original string
-    while (original < buffer.len) {
-        try new_contents.append(buffer[original]);
-        original += 1;
-    }
-    
-    return new_contents.toOwnedSlice();
 }
 
 
@@ -240,33 +265,34 @@ test "findSubstringIndices" {
     expect(mem.eql(usize, m6, &[_]usize{ 0, 18 }));
 }
 
-// fn testInplaceReplace(
-//     comptime T: type,
-//     string: []const T, old: []const T, new: []const T, expected: []const T
-// ) error{OutOfMemory}!void {
-//     mem.copy(u8, string, "Mississippi");
-//     const new_string = try replace(testing.allocator, string, old, new);
-//     defer testing.allocator.free(new_string.*);
-//     expect(mem.eql(u8, expected, new_string.*));
-// }
-
-// test "inplaceReplace" {
-//     var string = try testing.allocator.alloc(u8, 11);
-//     defer testing.allocator.free(string);
-// }
-
 fn testReplace(
     old: []const u8, new: []const u8, expected: []const u8
 ) error{OutOfMemory}!void {
     const new_string = try replace(testing.allocator, "Mississippi", old, new);
+    std.debug.print("{}\n", .{ new_string });
     defer testing.allocator.free(new_string);
     expect(mem.eql(u8, expected, new_string));
 }
 
 test "replace" {
+    try testReplace("is", "e", "Mesesippi");
+    try testReplace("i", "a", "Massassappa");
     try testReplace("iss", "e", "Meeippi");
     try testReplace("iss", "issi", "Missiissiippi");
-    try testReplace("i", "a", "Massassappa");
     try testReplace("iss", "", "Mippi");
     try testReplace("isss", "abc", "Mississippi");
+}
+
+fn testInplaceReplace(
+    string: []u8, old: []const u8, new: []const u8, expected: []const u8
+) error{OutOfMemory}!void {
+    mem.copy(u8, string, "Mississippi");
+    const new_string = try replace(testing.allocator, string, old, new);
+    defer testing.allocator.free(new_string.*);
+    expect(mem.eql(u8, expected, new_string.*));
+}
+
+test "inplaceReplace" {
+    var string = try testing.allocator.alloc(u8, 11);
+    defer testing.allocator.free(string);
 }

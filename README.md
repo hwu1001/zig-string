@@ -1,6 +1,8 @@
 
 Implements common string operations such as substring searching.
 
+Note: Most of these functions are in std.mem.
+
 Inspired by this repo: https://github.com/clownpriest/strings/
 
 To test:
