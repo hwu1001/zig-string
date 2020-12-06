@@ -1,3 +1,5 @@
+// # TODO: generic buffers instead of only u8
+
 const std = @import("std");
 const mem = std.mem;
 const ascii = std.ascii;
@@ -47,7 +49,7 @@ pub fn longestPrefixSuffix(
 /// Uses `allocator` for table generation, allocating the length of `pattern`.
 pub fn findSubstring(
     allocator: *Allocator, buffer: []const u8, pattern: []const u8
-) !?usize {
+) error{OutOfMemory}!?usize {
     if (isEmpty(buffer) or pattern.len < 1 or pattern.len > buffer.len) {
         return null;
     }
@@ -81,7 +83,7 @@ pub fn findSubstring(
 /// Caller owns the returned memory.
 pub fn findSubstringIndices(
     allocator: *Allocator, buffer: []const u8, pattern: []const u8
-) ![]usize {
+) error{OutOfMemory}![]usize {
     var indices = ArrayList(usize).init(allocator);
     defer indices.deinit();
     if (isEmpty(buffer) or pattern.len < 1 or pattern.len > buffer.len) {
@@ -117,7 +119,7 @@ pub fn findSubstringIndices(
 /// Checks that `pattern` occurs at least once in `buffer` as a substring.
 pub fn contains(
     allocator: *Allocator, buffer: []const u8, pattern: []const u8
-) !bool {
+) error{OutOfMemory}!bool {
     return null != try findSubstring(allocator, buffer, pattern);
 }
 
@@ -132,18 +134,20 @@ pub fn count(
 
 // TODO: implement a version without an allocator when old and new have the
 //  same length
-/// Replaces all occurrences of substring `old` replaced with `new` in place
+/// Replaces all occurrences of substring `old` replaced with `new`,
+/// returning a new array.
+/// Caller owns the returned memory.
 pub fn replace(
-    allocator: *Allocator, buffer: *[]u8, old: []const u8, new: []const u8
-) !void {
+    allocator: *Allocator, buffer: []const u8, old: []const u8, new: []const u8
+) error{OutOfMemory}![]const u8 {
     if (buffer.len < 1 or old.len < 1) {
-        return;
+        return mem.dupe(allocator, u8, buffer);
     }
 
-    var matches = try findSubstringIndices(allocator, buffer.*, old);
+    var matches = try findSubstringIndices(allocator, buffer, old);
     defer allocator.free(matches);
     if (matches.len < 1) {
-        return;
+        return mem.dupe(allocator, u8, buffer);
     }
     var new_contents = ArrayList(u8).init(allocator);
     defer new_contents.deinit();
@@ -151,7 +155,7 @@ pub fn replace(
     var original: usize = 0;
     for (matches) |match| {
         while (original < match) {
-            try new_contents.append(buffer.*[original]);
+            try new_contents.append(buffer[original]);
             original += 1;
         }
         original = match + old.len;
@@ -161,9 +165,11 @@ pub fn replace(
     }
     // Append end of string if match does not end original string
     while (original < buffer.len) {
-        try new_contents.append(buffer.*[original]);
+        try new_contents.append(buffer[original]);
         original += 1;
     }
+    
+    return new_contents.toOwnedSlice();
 }
 
 
@@ -178,11 +184,30 @@ test "isEmpty" {
     expect(isEmpty(s1));
 }
 
+test "contains" {
+    expect(try contains(testing.allocator, "Mississippi", "i"));
+    expect(try contains(testing.allocator, "Mississippi", "iss"));
+    expect(!try contains(testing.allocator, "Mississippi", "z"));
+    expect(try contains(testing.allocator, "Mississippi", "Mississippi"));
+}
+
+test "count" {
+    var string = "Mississippi";
+    expect(4 == try count(testing.allocator, string, "i"));
+    expect(1 == try count(testing.allocator, string, "M"));
+    expect(0 == try count(testing.allocator, string, "abc"));
+    expect(2 == try count(testing.allocator, string, "iss"));
+    expect(2 == try count(testing.allocator, string, "issi"));
+}
 
 test "longestPrefixSuffix" {
     const lps = try longestPrefixSuffix(testing.allocator, "issi");
     defer testing.allocator.free(lps);
     expect(mem.eql(usize, lps, &[_]usize{ 0, 0, 0, 1 }));
+
+    const lps2 = try longestPrefixSuffix(testing.allocator, "");
+    defer testing.allocator.free(lps2);
+    expect(mem.eql(usize, lps2, &[_]usize{ }));
 }
 
 test "findSubstringIndices" {
@@ -215,60 +240,33 @@ test "findSubstringIndices" {
     expect(mem.eql(usize, m6, &[_]usize{ 0, 18 }));
 }
 
-test "contains" {
-    const m1 = try contains(testing.allocator, "Mississippi", "i");
-    expect(m1);
+// fn testInplaceReplace(
+//     comptime T: type,
+//     string: []const T, old: []const T, new: []const T, expected: []const T
+// ) error{OutOfMemory}!void {
+//     mem.copy(u8, string, "Mississippi");
+//     const new_string = try replace(testing.allocator, string, old, new);
+//     defer testing.allocator.free(new_string.*);
+//     expect(mem.eql(u8, expected, new_string.*));
+// }
 
-    const m2 = try contains(testing.allocator, "Mississippi", "iss");
-    expect(m2);
-    
-    const m3 = try contains(testing.allocator, "Mississippi", "z");
-    expect(!m3);
+// test "inplaceReplace" {
+//     var string = try testing.allocator.alloc(u8, 11);
+//     defer testing.allocator.free(string);
+// }
 
-    const m4 = try contains(testing.allocator, "Mississippi", "Mississippi");
-    expect(m4);
+fn testReplace(
+    old: []const u8, new: []const u8, expected: []const u8
+) error{OutOfMemory}!void {
+    const new_string = try replace(testing.allocator, "Mississippi", old, new);
+    defer testing.allocator.free(new_string);
+    expect(mem.eql(u8, expected, new_string));
 }
 
 test "replace" {
-    var s = try testing.allocator.alloc(u8, 11);
-    defer testing.allocator.free(s);
-    mem.copy(u8, s, "Mississippi");
-    
-    try replace(testing.allocator, &s, "iss", "e");
-    std.debug.print("{}\n", .{s});
-    expect(mem.eql(u8, "Meeippi", span(s)));
-    mem.copy(u8, s, "Mississippi");
-
-    try replace(testing.allocator, &s, "iss", "issi");
-    expect(mem.eql(u8, "Missiissiippi", span(s)));
-    mem.copy(u8, s, "Mississippi");
-
-    try replace(testing.allocator, &s, "i", "a");
-    expect(mem.eql(u8, "Massassappa", span(s)));
-    mem.copy(u8, s, "Mississippi");
-
-    try replace(testing.allocator, &s, "iss", "");
-    expect(mem.eql(u8, "Mippi", span(s)));
-    mem.copy(u8, s, "Mississippi");
-
-    try replace(testing.allocator, &s, "Foo", "g");
-    expect(mem.eql(u8, "", span(s)));
-}
-
-test "count" {
-    var s = "Mississippi";
-    const c1 = try count(testing.allocator, s, "i");
-    expect(c1 == 4);
-
-    const c2 = try count(testing.allocator, s, "M");
-    expect(c2 == 1);
-
-    const c3 = try count(testing.allocator, s, "abc");
-    expect(c3 == 0);
-
-    const c4 = try count(testing.allocator, s, "iss");
-    expect(c4 == 2);
-
-    const c5 = try count(testing.allocator, s, "issi");
-    expect(c5 == 2);
+    try testReplace("iss", "e", "Meeippi");
+    try testReplace("iss", "issi", "Missiissiippi");
+    try testReplace("i", "a", "Massassappa");
+    try testReplace("iss", "", "Mippi");
+    try testReplace("isss", "abc", "Mississippi");
 }
