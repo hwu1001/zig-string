@@ -1,18 +1,3 @@
-
-Implements common string operations such as substring searching.
-
-Note: Most of these functions are in std.mem.
-
-Inspired by this repo: https://github.com/clownpriest/strings/
-
-To test:
-```bash
-cd zig-string
-zig test string.zig
-```
-
-Basic Usage:
-```zig
 const std = @import("std");
 const print = std.debug.print;
 const string = @import("string.zig");
@@ -34,10 +19,3 @@ pub fn main() !void {
         print("{}\n", .{ val });
     }
 }
-```
-
-This example can be run with:
-```bash
-cd zig-string
-zig run readme.zig
-```
