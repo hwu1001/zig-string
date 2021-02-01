@@ -1,15 +1,12 @@
 const std = @import("std");
 const mem = std.mem;
 const debug = std.debug;
-const ascii = std.ascii;
 const Allocator = mem.Allocator;
 const ArrayList = std.ArrayList;
 
 /// Alias for `buffer.len == 0`
 pub fn isEmpty(buffer: anytype) bool {
     // TODO: case match nullables
-    // Can't use Buffer.isNull because Buffer maintains a null byte at the
-    // end. (e.g., []u8 of "" in a Buffer is not null)
     return buffer.len == 0;
 }
 
