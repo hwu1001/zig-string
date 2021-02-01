@@ -235,7 +235,6 @@ test "findSubstringIndices" {
     defer testing.allocator.free(m2);
     expect(mem.eql(usize, m2, &[_]usize{ 1, 4 }));
 
-    // TODO: make this pass
     const m3 = try findSubstringIndices(testing.allocator, s, "issi");
     defer testing.allocator.free(m3);
     expect(mem.eql(usize, m3, &[_]usize{ 1, 4 }));
